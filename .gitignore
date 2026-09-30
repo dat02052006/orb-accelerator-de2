@@ -1,0 +1,33 @@
+# Quartus II compilation output & databases
+db/
+incremental_db/
+output_files/
+greybox_tmp/
+hc_output/
+.qsys_edit/
+hps_isw_handoff/
+*.rpt
+*.chg
+*.sof
+*.pof
+*.summary
+*.done
+*.pin
+*.qws
+*.smsg
+*.jdi
+
+# ModelSim / QuestaSim artifacts
+sim/work/
+sim/transcript
+sim/vsim.wlf
+sim/*.log
+sim/*.vstf
+
+# Python cache (golden model)
+__pycache__/
+*.pyc
+
+# OS generated files
+.DS_Store
+Thumbs.db
