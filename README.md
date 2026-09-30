@@ -18,9 +18,3 @@ A real-time hardware accelerator for the **ORB (Oriented FAST and Rotated BRIEF)
 - **EDA Tool:** Quartus II v13.0sp1 Web Edition (latest version supporting Cyclone II)
 - **Simulation:** ModelSim-Altera Starter Edition
 - **Golden Reference:** Python 3.x (OpenCV, NumPy)
-
-## Quick Start
-1. **Simulation:**
-   ```bash
-   cd sim
-   vsim -do run_sim.do
