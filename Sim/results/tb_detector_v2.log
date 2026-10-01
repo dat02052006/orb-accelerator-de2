@@ -1,0 +1,19 @@
+PASS V2 frame=0 7x7 map=49 keys=0 V1keys=0 cycles=93 inputspan=49
+PASS V2 frame=1 9x9 map=81 keys=4 V1keys=0 cycles=173 inputspan=98
+PASS V2 frame=2 23x19 map=437 keys=0 V1keys=0 cycles=574 inputspan=466
+PASS V2 frame=3 23x19 map=437 keys=0 V1keys=0 cycles=606 inputspan=498
+PASS V2 frame=4 23x19 map=437 keys=0 V1keys=0 cycles=581 inputspan=473
+PASS V2 frame=5 23x19 map=437 keys=0 V1keys=0 cycles=588 inputspan=480
+PASS V2 frame=6 23x19 map=437 keys=1 V1keys=0 cycles=613 inputspan=504
+PASS V2 frame=7 23x19 map=437 keys=0 V1keys=0 cycles=575 inputspan=467
+PASS V2 frame=8 23x19 map=437 keys=1 V1keys=1 cycles=620 inputspan=512
+PASS V2 frame=9 23x19 map=437 keys=1 V1keys=1 cycles=611 inputspan=503
+PASS reset mid-frame
+PASS V2 frame=10 23x19 map=437 keys=33 V1keys=16 cycles=619 inputspan=484
+PASS V2 frame=11 25x21 map=525 keys=43 V1keys=22 cycles=734 inputspan=585
+PASS V2 frame=12 17x15 map=255 keys=0 V1keys=0 cycles=359 inputspan=275
+PASS V2 frame=13 640x480 map=307200 keys=544 V1keys=540 cycles=309776 inputspan=307200
+PASS V2 frame=14 320x240 map=76800 keys=134 V1keys=130 cycles=85218 inputspan=83899
+PASS V2 frame=15 160x120 map=19200 keys=39 V1keys=35 cycles=21671 inputspan=20988
+ALL STREAMING TESTS PASSED
+ALL DETECTOR V2 TESTS PASSED: actual V1/V2 core comparison

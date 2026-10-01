@@ -1,0 +1,4 @@
+PASS NMS map=0 scores=117 keypoints=1
+PASS NMS map=1 scores=117 keypoints=0
+PASS NMS map=2 scores=117 keypoints=9
+ALL NMS TESTS PASSED

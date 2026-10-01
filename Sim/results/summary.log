@@ -1,0 +1,13 @@
+calibration.log: ALL SCORE NORMALIZATION TESTS PASSED: paired clean/noisy patterns; identity intensity scale.
+calibration.log: ALL EIGHT-PLACEMENT CALIBRATION TESTS PASSED
+calibration.log: ALL IDEAL EDGE ANGLE TESTS PASSED: 36 orientations
+source_checks.log: ALL ORIGINAL V1 PRESERVATION CHECKS PASSED
+source_checks.log: ALL RTL STYLE AND UNCHANGED FAST CORE CHECKS PASSED
+tb_border.log: ALL BORDER DETECTOR TESTS PASSED: 1080 cases, invalid slots poisoned
+tb_detector_v2.log: ALL STREAMING TESTS PASSED
+tb_detector_v2.log: ALL DETECTOR V2 TESTS PASSED: actual V1/V2 core comparison
+tb_hybrid.log: ALL HYBRID TRANSITION TESTS PASSED: nine forced boundary/transition stalls
+tb_nms_v2.log: ALL NMS V2 TESTS PASSED
+v1_regression.log: ALL FAST/SCORE TESTS PASSED: 1551 cases
+v1_regression.log: ALL NMS TESTS PASSED
+v1_regression.log: ALL DETECTOR TESTS PASSED: dense=392928 keypoints=820

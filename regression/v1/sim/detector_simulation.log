@@ -1,0 +1,10 @@
+PASS frame=0 7x7 level=0 threshold=20 dense=1 keys=0 mode=0
+PASS frame=1 9x9 level=1 threshold=20 dense=9 keys=1 mode=2
+PASS reset during detector pipeline after 350 pixels
+PASS frame=2 31x27 level=2 threshold=20 dense=525 keys=48 mode=1
+PASS frame=3 33x29 level=0 threshold=0 dense=621 keys=57 mode=2
+PASS frame=4 17x15 level=1 threshold=255 dense=99 keys=0 mode=1
+PASS frame=5 640x480 level=0 threshold=20 dense=300516 keys=540 mode=0
+PASS frame=6 320x240 level=1 threshold=20 dense=73476 keys=130 mode=1
+PASS frame=7 160x120 level=2 threshold=20 dense=17556 keys=35 mode=2
+ALL DETECTOR TESTS PASSED: dense=392928 keypoints=820
