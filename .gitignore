@@ -1,4 +1,7 @@
-# Quartus II compilation output & databases
+# ============================================================
+# Quartus II
+# ============================================================
+
 db/
 incremental_db/
 output_files/
@@ -6,6 +9,7 @@ greybox_tmp/
 hc_output/
 .qsys_edit/
 hps_isw_handoff/
+
 *.rpt
 *.chg
 *.sof
@@ -17,17 +21,70 @@ hps_isw_handoff/
 *.smsg
 *.jdi
 
-# ModelSim / QuestaSim artifacts
-sim/work/
-sim/transcript
-sim/vsim.wlf
-sim/*.log
-sim/*.vstf
+# Quartus temporary / backup files
+*.bak
+*.tmp
 
-# Python cache (golden model)
+
+# ============================================================
+# ModelSim / QuestaSim
+# ============================================================
+
+work/
+sim/work/
+
+transcript
+sim/transcript
+
+vsim.wlf
+sim/vsim.wlf
+
+*.wlf
+*.vstf
+
+
+# ============================================================
+# Icarus Verilog
+# ============================================================
+
+*.vvp
+
+
+# ============================================================
+# Simulation-generated files
+# ============================================================
+
+*.log
+*.vcd
+*.fst
+
+
+# ============================================================
+# Python
+# ============================================================
+
 __pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
 
-# OS generated files
+
+# ============================================================
+# Editors / IDE
+# ============================================================
+
+.vscode/
+.idea/
+
+*.swp
+*.swo
+*~
+
+
+# ============================================================
+# Operating System
+# ============================================================
+
 .DS_Store
 Thumbs.db
+desktop.ini
