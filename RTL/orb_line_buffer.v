@@ -83,7 +83,7 @@ module orb_line_buffer #(
         end
     end
 
-    always @(*) begin
+    always @* begin
         case (column_bank)
             3'd0: column_data = {current_pixel, row_reads[47:40], row_reads[39:32], row_reads[31:24], row_reads[23:16], row_reads[15:8], row_reads[7:0]};
             3'd1: column_data = {current_pixel, row_reads[7:0], row_reads[47:40], row_reads[39:32], row_reads[31:24], row_reads[23:16], row_reads[15:8]};
