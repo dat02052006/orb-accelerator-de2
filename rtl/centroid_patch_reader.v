@@ -4,12 +4,12 @@ module centroid_patch_reader (
 
     // ---- dieu khien ----
     input  wire        start,           // xung bat dau (kx, ky phai hop le tai chu ky nay)
-    input  wire [9:0]  kx,              // toa do x cua keypoint (15..624)
-    input  wire [8:0]  ky,              // toa do y cua keypoint (15..464)
+    input  wire [9:0]  kx,              // toa do x cua keypoint (21..618)
+    input  wire [8:0]  ky,              // toa do y cua keypoint (21..458)
     output wire        busy,
     output wire        done,            // xung 1 chu ky khi nap xong patch
     output wire        error,           // xung 1 chu ky neu keypoint nam ngoai vung hop le:
-                                        //   kx < 15, kx > 624, ky < 15 hoac ky > 464
+                                        //   kx < 21, kx > 618, ky < 21 hoac ky > 458
 
     // ---- giao tiep sram_controller (giong image_reader) ----
     output wire [17:0] sram_addr,       // dia chi word
@@ -17,22 +17,22 @@ module centroid_patch_reader (
     input  wire [15:0] sram_rd_data,
     input  wire        sram_valid,
 
-    // ---- giao tiep patch buffer / bo tich luy ----
+    // ---- giao tiep patch buffer / bo tich luy / bo loc Gaussian ----
     output wire        pb_we,
-    output wire [4:0]  pb_row,          // hang trong patch (0..30)
-    output wire [3:0]  pb_word,         // word trong hang (0..15)
-    output wire [8:0]  pb_addr,         // = {pb_row, pb_word} = row*16 + word (0..495)
+    output wire [5:0]  pb_row,          // hang trong patch (0..42)
+    output wire [4:0]  pb_word,         // word trong hang (0..21)
+    output wire [10:0] pb_addr,         // = {pb_row, pb_word} (row*32 + word, khong dong goi: 22 word / hang)
     output wire [15:0] pb_wdata,        // [7:0] = pixel cot chan, [15:8] = pixel cot le (theo toa do anh)
-    output wire        patch_x0_odd     // 1: pixel dau patch (cot x0 = kx-15) la byte le cua word dau
+    output wire        patch_x0_odd     // 1: pixel dau patch (cot x0 = kx-21) la byte le cua word dau
                                         //    pixel cot c cua patch nam o byte (c + patch_x0_odd): chan->[7:0], le->[15:8]
 );
 
-    localparam [3:0] LAST_WORD = 4'd15;            // moi hang doc 16 word = 32 pixel (can 31)
-    localparam [4:0] LAST_ROW  = 5'd30;            // 31 hang
-    localparam [9:0] KX_MIN    = 10'd15;
-    localparam [9:0] KX_MAX    = 10'd624;          // 639 - 15
-    localparam [8:0] KY_MIN    = 9'd15;
-    localparam [8:0] KY_MAX    = 9'd464;           // 479 - 15
+    localparam [4:0] LAST_WORD = 5'd21;            // moi hang doc 22 word = 44 pixel (can 43)
+    localparam [5:0] LAST_ROW  = 6'd42;            // 43 hang
+    localparam [9:0] KX_MIN    = 10'd21;
+    localparam [9:0] KX_MAX    = 10'd618;          // 639 - 21
+    localparam [8:0] KY_MIN    = 9'd21;
+    localparam [8:0] KY_MAX    = 9'd458;           // 479 - 21
 
     // ---------------- state encoding ----------------
     localparam [2:0] S_IDLE  = 3'd0,
@@ -47,8 +47,8 @@ module centroid_patch_reader (
     // ---------------- datapath registers ----------------
     reg [17:0] row_base;        // = (y0 + row_cnt)*320 + (x0 >> 1)
     reg        x0_odd_r;        // x0[0], chot luc start
-    reg [3:0]  word_cnt;        // 0..15
-    reg [4:0]  row_cnt;         // 0..30
+    reg [4:0]  word_cnt;        // 0..21
+    reg [5:0]  row_cnt;         // 0..42
     reg [15:0] data_r;          // word doc duoc tu SRAM
 
     wire last_word = (word_cnt == LAST_WORD);
@@ -60,8 +60,8 @@ module centroid_patch_reader (
     wire params_ok = kx_ok && ky_ok;
 
     // goc tren trai cua patch
-    wire [9:0] x0 = kx - 10'd15;                    // 0..609
-    wire [8:0] y0 = ky - 9'd15;                     // 0..449
+    wire [9:0] x0 = kx - 10'd21;                    // 0..597
+    wire [8:0] y0 = ky - 9'd21;                     // 0..437
 
     // dia chi word dau tien = y0*320 + (x0>>1), y0*320 = y0*256 + y0*64
     wire [17:0] start_base = ({9'd0, y0} << 8) + ({9'd0, y0} << 6) + {9'd0, x0[9:1]};
@@ -107,8 +107,8 @@ module centroid_patch_reader (
         if (!rst_n) begin
             row_base <= 18'd0;
             x0_odd_r <= 1'b0;
-            word_cnt <= 4'd0;
-            row_cnt  <= 5'd0;
+            word_cnt <= 5'd0;
+            row_cnt  <= 6'd0;
             data_r   <= 16'd0;
         end else begin
             case (state)
@@ -119,19 +119,19 @@ module centroid_patch_reader (
                     end
                 end
                 S_INIT: begin
-                    word_cnt <= 4'd0;
-                    row_cnt  <= 5'd0;
+                    word_cnt <= 5'd0;
+                    row_cnt  <= 6'd0;
                 end
                 S_READ: begin
                     if (sram_valid) data_r <= sram_rd_data;
                 end
                 S_STORE: begin
                     if (last_word) begin
-                        word_cnt <= 4'd0;
-                        row_cnt  <= row_cnt + 5'd1;
+                        word_cnt <= 5'd0;
+                        row_cnt  <= row_cnt + 6'd1;
                         row_base <= row_base + 18'd320;
                     end else begin
-                        word_cnt <= word_cnt + 4'd1;
+                        word_cnt <= word_cnt + 5'd1;
                     end
                 end
                 default: ;
@@ -143,7 +143,7 @@ module centroid_patch_reader (
     // FSM phan 3: combinational output logic
     // ======================================================
     assign sram_re       = (state == S_READ);
-    assign sram_addr     = row_base + {14'd0, word_cnt};
+    assign sram_addr     = row_base + {13'd0, word_cnt};
 
     assign pb_we         = (state == S_STORE);
     assign pb_row        = row_cnt;

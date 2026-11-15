@@ -22,6 +22,12 @@ module candidate_buffer_controller (
     input  wire         nms_done,
     input  wire [1:0]   nms_done_bank,
 
+    // ---- Từ top (điều khiển frame) ----
+    // Xung 1 chu kỳ đầu mỗi frame: đưa row_id về 0.
+    // Phải phát khi 3 bank đã rỗng (NMS xử lý xong frame trước) và
+    // ít nhất 1 chu kỳ trước row_start đầu tiên của frame mới.
+    input  wire         frame_clear,
+
     // ---- Ra ngoài ----
     output wire [1:0]   wr_bank_sel,
     output wire         wr_enable,
@@ -210,6 +216,13 @@ module candidate_buffer_controller (
                           next_count_2 = 10'd0;
                       end
             endcase
+        end
+
+        //--------------------------------------------------------------
+        // Ưu tiên 5 (cao nhất): frame_clear -> row_id về 0 cho frame mới
+        //--------------------------------------------------------------
+        if (frame_clear) begin
+            next_row_id_cur = 10'd0;
         end
     end
 

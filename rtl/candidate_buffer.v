@@ -15,6 +15,9 @@ module candidate_buffer (
     input  wire         row_start,
     input  wire         row_done,
 
+    // ---- Frame control (từ top) ----
+    input  wire         frame_clear,
+
     // ---- NMS interface ----
     input  wire         nms_done,
     input  wire [1:0]   nms_done_bank,
@@ -60,6 +63,7 @@ module candidate_buffer (
         .row_start      (row_start),
         .row_done       (row_done),
         .score_valid    (score_valid),
+        .frame_clear    (frame_clear),
         .nms_done       (nms_done),
         .nms_done_bank  (nms_done_bank),
         .wr_bank_sel    (wr_bank_sel),
