@@ -26,7 +26,7 @@
 module orb_fast_detector #(
     parameter IMG_W   = 640,
     parameter IMG_H   = 480,
-    parameter BORDER  = 15,
+    parameter BORDER  = 21,
     parameter COORD_W = 10
 )(
     input  wire                 clk,

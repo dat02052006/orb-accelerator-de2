@@ -4,7 +4,7 @@ module orb_line_buffer (
     // ---- cong ghi (tu image_reader) ----
     input  wire        lb_we,
     input  wire [4:0]  lb_row,          // 0..6
-    input  wire [8:0]  lb_col_word,     // 0..319
+    input  wire [8:0]  lb_col_word,     // 0..301
     input  wire [15:0] lb_wdata,        // [7:0] cot chan, [15:8] cot le
 
     // ---- cong doc: 7 pixel cung cot ----
@@ -21,13 +21,13 @@ module orb_line_buffer (
 );
 
     // ---------------- 7 bo nho hang: 320 word x 16 bit ----------------
-    (* ramstyle = "M4K" *) reg [15:0] mem0 [0:319];
-    (* ramstyle = "M4K" *) reg [15:0] mem1 [0:319];
-    (* ramstyle = "M4K" *) reg [15:0] mem2 [0:319];
-    (* ramstyle = "M4K" *) reg [15:0] mem3 [0:319];
-    (* ramstyle = "M4K" *) reg [15:0] mem4 [0:319];
-    (* ramstyle = "M4K" *) reg [15:0] mem5 [0:319];
-    (* ramstyle = "M4K" *) reg [15:0] mem6 [0:319];
+    (* ramstyle = "M4K" *) reg [15:0] mem0 [0:301];
+    (* ramstyle = "M4K" *) reg [15:0] mem1 [0:301];
+    (* ramstyle = "M4K" *) reg [15:0] mem2 [0:301];
+    (* ramstyle = "M4K" *) reg [15:0] mem3 [0:301];
+    (* ramstyle = "M4K" *) reg [15:0] mem4 [0:301];
+    (* ramstyle = "M4K" *) reg [15:0] mem5 [0:301];
+    (* ramstyle = "M4K" *) reg [15:0] mem6 [0:301];
 
     reg [15:0] word0, word1, word2, word3, word4, word5, word6;
 

@@ -1,4 +1,6 @@
-module orb_window_generator (
+module orb_window_generator #(
+	 parameter [9:0] COL_OFFSET = 10'd18
+)(
     input  wire         clk,
     input  wire         rst_n,
 
@@ -38,14 +40,14 @@ module orb_window_generator (
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             fill_cnt     <= 3'd0;
-            in_col       <= 10'd0;
+            in_col       <= COL_OFFSET;       // Sửa từ 10'd0 -> COL_OFFSET
             window_valid <= 1'b0;
             win_center_x <= 10'd0;
         end else begin
             window_valid <= 1'b0;
             if (clear) begin
                 fill_cnt <= 3'd0;
-                in_col   <= 10'd0;
+                in_col   <= COL_OFFSET;       // Sửa từ 10'd0 -> COL_OFFSET
             end else if (in_valid) begin
                 in_col <= in_col + 10'd1;
                 if (!fill_full) begin

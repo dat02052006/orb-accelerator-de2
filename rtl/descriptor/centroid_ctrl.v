@@ -1,5 +1,5 @@
 module centroid_ctrl #(
-    parameter ADDR_W = 10                       // buffer keypoint toi da 2^ADDR_W phan tu
+    parameter ADDR_W = 11                       // buffer keypoint toi da 2^ADDR_W phan tu
 )(
     input  wire                clk,
     input  wire                rst_n,

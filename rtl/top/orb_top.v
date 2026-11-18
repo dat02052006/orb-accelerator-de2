@@ -1,44 +1,21 @@
 // ============================================================================
 // orb_top.v
-// Top-level ORB accelerator (Cyclone II / DE2): noi toan bo pipeline.
+// Top-level ORB accelerator (Cyclone II / DE2): ket noi toan bo he thong.
+//   Nios II -> image_loader -> loader_sram_pack --\
+//                                                  +--> sram_controller <-> SRAM
+//   image_reader (FAST) ---------------------------+ (mux theo pha)
+//   centroid_patch_reader --------------------------/
 //
-//   Nios II --> image_loader --> loader_sram_pack --\
-//                                                    +--> sram_controller --> SRAM
-//   image_reader (FAST) -----------------------------+ (mux theo pha)
-//   centroid_patch_reader ----------------------------/
-//
+//   Pipeline xu ly anh:
 //   image_reader -> orb_line_buffer -> orb_line_buffer_ctrl -> orb_window_generator
-//     -> orb_fast_detector -> orb_fast_score -> candidate_buffer <-> nms_top
-//     -> keypoint_buffer -> centroid_ctrl -> { centroid_patch_reader,
+//     -> orb_fast_detector -> orb_fast_score -> nms_stream_v3
+//     -> keypoint_mem (M4K) -> centroid_ctrl -> { centroid_patch_reader,
 //        centroid_moment_accumulator, centroid_angle, rbrief_gauss_window,
 //        rbrief_descriptor } -> ket qua (out_*)
-//
-// Xu ly TUNG FRAME, tuan tu (khong chong lan FAST/NMS voi centroid), nen SRAM
-// chi co 1 chu so huu o moi pha:
-//   T_IDLE                     : loader (Nios II nap anh)
-//   T_START..T_NMS             : image_reader (FAST)
-//   T_ORI_START, T_ORI_WAIT    : centroid_patch_reader (sram_gnt = 1)
-//
-// Dieu khien frame (FSM 3 khoi):
-//   T_START     : phat frame_clear (candidate_buffer), kp_clear (keypoint_buffer),
-//                 lb_start (line buffer ctrl) cung 1 chu ky. row_start dau tien
-//                 den sau khi nap 7 hang tu SRAM (hang tram chu ky) nen
-//                 frame_clear luon som hon row_start it nhat 1 chu ky.
-//   T_SCAN      : cho orb_line_buffer_ctrl bao frame_done (loi -> T_ERR)
-//   T_DRAIN     : cho DRAIN_CYC chu ky de pipeline window/FAST/score xa het
-//                 (hang cuoi vao candidate_buffer)
-//   T_NMS       : cho nms_busy = 0 va bank_ready = 0 lien tuc IDLE_CYC chu ky
-//   T_ORI_START : phat ori_start (centroid_ctrl)
-//   T_ORI_WAIT  : cho ori_done
-//   T_DONE      : phat orb_done 1 chu ky
-//
-// Luu y: sau T_ERR cac bank candidate / pipeline co the con du lieu do dang
-// dang, nen can reset (rst_n) truoc khi chay frame ke tiep.
-// image_dma chua duoc noi (xem ghi chu cuoi file).
 // ============================================================================
 module orb_top #(
-    parameter DRAIN_CYC = 64,           // chu ky cho pipeline xa sau frame_done (< 128)
-    parameter IDLE_CYC  = 8             // so chu ky NMS phai rong lien tuc (< 128)
+    parameter ADDR_W    = 11,           // Do sau buffer keypoint: 2^10 = 1024
+    parameter DRAIN_CYC = 16            // So chu ky xa pipeline FAST/score sau frame_done
 )(
     input  wire         clk,
     input  wire         rst_n,
@@ -54,24 +31,24 @@ module orb_top #(
     output wire         size_error,
 
     // ---- Nios II: dieu khien xu ly ----
-    input  wire         orb_start,      // xung: xu ly 1 frame (bo qua neu image_loaded = 0)
+    input  wire         orb_start,      // xung: xu ly 1 frame (bo qua neu chua san sang)
     input  wire [7:0]   fast_threshold, // nguong FAST T
     output wire         orb_busy,
     output wire         orb_done,       // xung 1 chu ky: xong frame
     output wire         orb_error,      // xung 1 chu ky: loi line buffer / image_reader
-    output wire         kp_overflow,    // keypoint_buffer bi day (co keypoint bi bo)
+    output reg          kp_overflow,    // muc 1 neu so keypoint > 1024
 
-    // ---- ket qua (tu centroid_ctrl, chua co buffer dau ra) ----
+    // ---- Ket qua dau ra (tu centroid_ctrl) ----
     output wire         out_we,
-    output wire [9:0]   out_addr,
+    output wire [10:0]   out_addr,
     output wire [9:0]   out_x,
     output wire [8:0]   out_y,
     output wire [7:0]   out_score,
     output wire [4:0]   out_angle,
     output wire [255:0] out_desc,
-    output wire [10:0]  out_count,      // so keypoint da ghi ra
+    output wire [11:0]  out_count,      // so keypoint da ghi ra
 
-    // ---- chan SRAM (DE2) ----
+    // ---- Chan vat ly SRAM (DE2) ----
     output wire [17:0]  sram_addr,
     inout  wire [15:0]  sram_dq,
     output wire         sram_ce_n,
@@ -81,135 +58,122 @@ module orb_top #(
     output wire         sram_lb_n
 );
 
+    localparam integer MAX_KP = (1 << ADDR_W); // 1024
+
     // ========================================================================
-    // FSM dieu khien frame
+    // 1. FSM dieu khien toan khung hinh (Frame-level Master Controller)
     // ========================================================================
-    localparam [3:0] T_IDLE      = 4'd0,
-                     T_START     = 4'd1,
-                     T_SCAN      = 4'd2,
-                     T_DRAIN     = 4'd3,
-                     T_NMS       = 4'd4,
-                     T_ORI_START = 4'd5,
-                     T_ORI_WAIT  = 4'd6,
-                     T_DONE      = 4'd7,
-                     T_ERR       = 4'd8;
+    localparam [3:0] T_IDLE        = 4'd0,
+                     T_START       = 4'd1,
+                     T_SCAN        = 4'd2,
+                     T_DRAIN       = 4'd3,
+                     T_NMS_FLUSH   = 4'd4,
+                     T_NMS_WAIT    = 4'd5,
+                     T_ORI_START   = 4'd6,
+                     T_ORI_WAIT    = 4'd7,
+                     T_DONE        = 4'd8,
+                     T_ERR         = 4'd9;
 
     reg [3:0] state, next_state;
-    reg [6:0] cnt;                      // dem cho T_DRAIN / T_NMS
+    reg [4:0] drain_cnt;
+    reg       nms_ready;                // = 1 khi nms_stream_v3 da xa xong & san sang
 
-    // tin hieu tu cac khoi (khai bao truoc khi dung)
+    // Tin hieu tu cac khoi con
     wire lb_frame_done;
     wire lb_error;
-    wire nms_busy;
-    wire bank_ready;
+    wire nms_flush_done;
     wire ori_done;
 
-    wire nms_idle  = ~nms_busy & ~bank_ready;
-    wire drain_end = (cnt == (DRAIN_CYC - 1));
-    wire idle_ok   = nms_idle && (cnt == (IDLE_CYC - 1));
+    wire drain_end = (drain_cnt == (DRAIN_CYC - 1));
 
-    // ------------------------------------------------------------------
-    // FSM phan 1: next-state transition logic
-    // ------------------------------------------------------------------
+    // FSM phan 1: next-state logic
     always @(*) begin
         next_state = state;
         case (state)
             T_IDLE: begin
-                if (orb_start && image_loaded) next_state = T_START;
+                if (orb_start && image_loaded && nms_ready)
+                    next_state = T_START;
             end
-            T_START: next_state = T_SCAN;
+            T_START:     next_state = T_SCAN;
             T_SCAN: begin
                 if (lb_error)           next_state = T_ERR;
                 else if (lb_frame_done) next_state = T_DRAIN;
             end
             T_DRAIN: begin
-                if (drain_end) next_state = T_NMS;
+                if (drain_end) next_state = T_NMS_FLUSH;
             end
-            T_NMS: begin
-                if (idle_ok) next_state = T_ORI_START;
+            T_NMS_FLUSH: next_state = T_NMS_WAIT;
+            T_NMS_WAIT: begin
+                if (nms_flush_done) next_state = T_ORI_START;
             end
             T_ORI_START: next_state = T_ORI_WAIT;
             T_ORI_WAIT: begin
                 if (ori_done) next_state = T_DONE;
             end
-            T_DONE:  next_state = T_IDLE;
-            T_ERR:   next_state = T_IDLE;
-            default: next_state = T_IDLE;
+            T_DONE:      next_state = T_IDLE;
+            T_ERR:       next_state = T_IDLE;
+            default:     next_state = T_IDLE;
         endcase
     end
 
-    // ------------------------------------------------------------------
-    // FSM phan 2: state register update
-    // ------------------------------------------------------------------
+    // FSM phan 2: state register
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) state <= T_IDLE;
         else        state <= next_state;
     end
 
-    // ------------------------------------------------------------------
-    // Bo dem cho: T_DRAIN dem het DRAIN_CYC; T_NMS dem so chu ky rong lien tuc
-    // (ve 0 khi roi state, nen vao state moi luon bat dau tu 0)
-    // ------------------------------------------------------------------
+    // Bo dem xa pipeline & co san sang cua NMS
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            cnt <= 7'd0;
+            drain_cnt <= 5'd0;
+            nms_ready <= 1'b0;
         end else begin
-            case (state)
-                T_DRAIN: begin
-                    if (drain_end) cnt <= 7'd0;
-                    else           cnt <= cnt + 7'd1;
-                end
-                T_NMS: begin
-                    if (!nms_idle)                 cnt <= 7'd0;
-                    else if (cnt == (IDLE_CYC - 1)) cnt <= 7'd0;
-                    else                            cnt <= cnt + 7'd1;
-                end
-                default: cnt <= 7'd0;
-            endcase
+            if (state == T_DRAIN)
+                drain_cnt <= drain_end ? 5'd0 : (drain_cnt + 5'd1);
+            else
+                drain_cnt <= 5'd0;
+
+            if (state == T_START)
+                nms_ready <= 1'b0;
+            else if (nms_flush_done)
+                nms_ready <= 1'b1;
         end
     end
 
-    // ------------------------------------------------------------------
-    // FSM phan 3: combinational output logic
-    // ------------------------------------------------------------------
-    wire frame_clear = (state == T_START);      // -> candidate_buffer
-    wire kp_clear    = (state == T_START);      // -> keypoint_buffer
-    wire lb_start    = (state == T_START);      // -> orb_line_buffer_ctrl
-    wire ori_start   = (state == T_ORI_START);  // -> centroid_ctrl
+    // FSM phan 3: output logic
+    wire kp_clear       = (state == T_START);
+    wire lb_start       = (state == T_START);
+    wire nms_frame_done = (state == T_NMS_FLUSH);
+    wire ori_start      = (state == T_ORI_START);
 
-    wire sel_fast = (state == T_START) || (state == T_SCAN) ||
-                    (state == T_DRAIN) || (state == T_NMS);
+    wire sel_fast = (state == T_START) || (state == T_SCAN) || (state == T_DRAIN);
     wire sel_ori  = (state == T_ORI_START) || (state == T_ORI_WAIT);
-
-    wire sram_gnt = sel_ori;                    // -> centroid_ctrl (FAST da xong)
+    wire sram_gnt = sel_ori;
 
     assign orb_busy  = (state != T_IDLE);
     assign orb_done  = (state == T_DONE);
     assign orb_error = (state == T_ERR);
 
     // ========================================================================
-    // SRAM: controller + mux 3 chu so huu
+    // 2. SRAM Controller + Mux 3 chu so huu (Loader / FAST / Centroid)
     // ========================================================================
-    // loader (qua bo gop byte -> word)
     wire [18:0] ld_addr;
     wire [7:0]  ld_wdata;
     wire        ld_we;
     wire        ld_ready;
+
     wire [17:0] pk_addr;
     wire [15:0] pk_wdata;
     wire        pk_we;
 
-    // image_reader (FAST)
     wire [17:0] ir_sram_addr;
     wire        ir_sram_re;
     wire        ir_sram_valid;
 
-    // centroid_patch_reader
     wire [17:0] pr_sram_addr;
     wire        pr_sram_re;
     wire        pr_sram_valid;
 
-    // sram_controller
     wire [17:0] m_addr;
     wire [15:0] m_wdata;
     wire        m_we;
@@ -249,7 +213,7 @@ module orb_top #(
     );
 
     // ========================================================================
-    // Nap anh
+    // 3. Giao tiep nap anh tu Nios II
     // ========================================================================
     image_loader u_loader (
         .clk          (clk),
@@ -282,7 +246,7 @@ module orb_top #(
     );
 
     // ========================================================================
-    // FAST: image_reader -> line buffer -> window 7x7
+    // 4. Pipeline FAST-9: image_reader -> line_buffer -> window -> detector -> score
     // ========================================================================
     wire        ir_start;
     wire [8:0]  ir_first_row;
@@ -304,33 +268,30 @@ module orb_top #(
     wire        win_clear;
     wire        win_in_valid;
     wire [7:0]  win_p0, win_p1, win_p2, win_p3, win_p4, win_p5, win_p6;
-
     wire [8:0]  lb_center_y;
-    wire        lb_busy;
-    wire        lb_row_done;            // hang tam cua line buffer (khong dung: score tu phat row_*)
 
     orb_line_buffer_ctrl u_lbctrl (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .start        (lb_start),
-        .busy         (lb_busy),
-        .frame_done   (lb_frame_done),
-        .error        (lb_error),
-        .row_done     (lb_row_done),
-        .center_y     (lb_center_y),
-        .ir_start     (ir_start),
-        .ir_first_row (ir_first_row),
-        .ir_first_bank(ir_first_bank),
-        .ir_num_rows  (ir_num_rows),
-        .ir_done      (ir_done),
-        .ir_error     (ir_error),
-        .lb_rd_en     (lb_rd_en),
-        .lb_rd_col    (lb_rd_col),
-        .lb_rd_valid  (lb_rd_valid),
+        .clk           (clk),
+        .rst_n         (rst_n),
+        .start         (lb_start),
+        .busy          (),
+        .frame_done    (lb_frame_done),
+        .error         (lb_error),
+        .row_done      (),
+        .center_y      (lb_center_y),
+        .ir_start      (ir_start),
+        .ir_first_row  (ir_first_row),
+        .ir_first_bank (ir_first_bank),
+        .ir_num_rows   (ir_num_rows),
+        .ir_done       (ir_done),
+        .ir_error      (ir_error),
+        .lb_rd_en      (lb_rd_en),
+        .lb_rd_col     (lb_rd_col),
+        .lb_rd_valid   (lb_rd_valid),
         .lb_p0 (lb_p0), .lb_p1 (lb_p1), .lb_p2 (lb_p2), .lb_p3 (lb_p3),
         .lb_p4 (lb_p4), .lb_p5 (lb_p5), .lb_p6 (lb_p6),
-        .win_clear    (win_clear),
-        .win_in_valid (win_in_valid),
+        .win_clear     (win_clear),
+        .win_in_valid  (win_in_valid),
         .win_p0 (win_p0), .win_p1 (win_p1), .win_p2 (win_p2), .win_p3 (win_p3),
         .win_p4 (win_p4), .win_p5 (win_p5), .win_p6 (win_p6)
     );
@@ -368,7 +329,6 @@ module orb_top #(
         .rd_p4 (lb_p4), .rd_p5 (lb_p5), .rd_p6 (lb_p6)
     );
 
-    // cua so 7x7: wRC, R = hang (0 = tren cung), C = cot (6 = moi nhat); tam = w33
     wire        window_valid;
     wire [9:0]  win_center_x;
     wire [7:0]  w02, w03, w04;
@@ -379,7 +339,9 @@ module orb_top #(
     wire [7:0]  w51, w55;
     wire [7:0]  w62, w63, w64;
 
-    orb_window_generator u_window (
+    orb_window_generator #(
+        .COL_OFFSET (10'd18)
+    ) u_window (
         .clk          (clk),
         .rst_n        (rst_n),
         .clear        (win_clear),
@@ -389,28 +351,27 @@ module orb_top #(
         .window_valid (window_valid),
         .win_center_x (win_center_x),
         .window_flat  (),
-        .w02 (w02), .w03 (w03), .w04 (w04),
-        .w11 (w11), .w15 (w15),
-        .w20 (w20), .w26 (w26),
-        .w30 (w30), .w33 (w33), .w36 (w36),
-        .w40 (w40), .w46 (w46),
-        .w51 (w51), .w55 (w55),
-        .w62 (w62), .w63 (w63), .w64 (w64)
+        .w00(), .w01(), .w02(w02), .w03(w03), .w04(w04), .w05(), .w06(),
+        .w10(), .w11(w11), .w12(), .w13(), .w14(), .w15(w15), .w16(),
+        .w20(w20), .w21(), .w22(), .w23(), .w24(), .w25(), .w26(w26),
+        .w30(w30), .w31(), .w32(), .w33(w33), .w34(), .w35(), .w36(w36),
+        .w40(w40), .w41(), .w42(), .w43(), .w44(), .w45(), .w46(w46),
+        .w50(), .w51(w51), .w52(), .w53(), .w54(), .w55(w55), .w56(),
+        .w60(), .w61(), .w62(w62), .w63(w63), .w64(w64), .w65(), .w66()
     );
 
-    // ========================================================================
-    // FAST-9 detector + score
-    //   p0=(0,-3) p1=(1,-3) p2=(2,-2) p3=(3,-1) p4=(3,0) p5=(3,1) p6=(2,2) p7=(1,3)
-    //   p8=(0,3) p9=(-1,3) p10=(-2,2) p11=(-3,1) p12=(-3,0) p13=(-3,-1)
-    //   p14=(-2,-2) p15=(-1,-3);  pixel (dx,dy) = w[3+dy][3+dx]
-    // ========================================================================
     wire         det_valid;
     wire         det_is_corner;
     wire [9:0]   det_x;
     wire [9:0]   det_y;
     wire [135:0] det_pack;
 
-    orb_fast_detector u_fast (
+    orb_fast_detector #(
+        .IMG_W   (640),
+        .IMG_H   (480),
+        .BORDER  (21),
+        .COORD_W (10)
+    ) u_fast (
         .clk       (clk),
         .rst_n     (rst_n),
         .in_valid  (window_valid),
@@ -430,12 +391,12 @@ module orb_top #(
     );
 
     wire        score_valid;
-    wire [9:0]  score_x;
     wire [7:0]  score_value;
-    wire        score_row_start;
-    wire        score_row_done;
 
-    orb_fast_score u_score (
+    orb_fast_score #(
+        .COORD_W   (10),
+        .SCORE_DEC (1)
+    ) u_score (
         .clk          (clk),
         .rst_n        (rst_n),
         .in_valid     (det_valid),
@@ -443,274 +404,114 @@ module orb_top #(
         .in_x         (det_x),
         .in_pack      (det_pack),
         .score_valid  (score_valid),
-        .score_x      (score_x),
+        .score_x      (),
         .score_value  (score_value),
-        .row_start    (score_row_start),
-        .row_done     (score_row_done)
+        .row_start    (),
+        .row_done     ()
     );
 
     // ========================================================================
-    // Candidate buffer + NMS + keypoint buffer
+    // 5. NMS Streaming 3x3 (nms_stream_v3) + Keypoint Buffer (M4K)
     // ========================================================================
-    wire        nms_done;
-    wire [1:0]  nms_done_bank;
-    wire [9:0]  bank_count_0, bank_count_1, bank_count_2;
-    wire [9:0]  bank_row_0,   bank_row_1,   bank_row_2;
-    wire [2:0]  bank_state_0, bank_state_1, bank_state_2;
-    wire        cb_rd_en_0, cb_rd_en_1, cb_rd_en_2;
-    wire [9:0]  cb_rd_addr_0, cb_rd_addr_1, cb_rd_addr_2;
-    wire [17:0] cb_rd_data_0, cb_rd_data_1, cb_rd_data_2;
+    // Tre det_valid 6 chu ky de khop chinh xac voi do tre 6 stage cua orb_fast_score
+    reg [5:0] det_vld_sr;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) det_vld_sr <= 6'd0;
+        else        det_vld_sr <= {det_vld_sr[4:0], det_valid};
+    end
+    wire nms_pix_valid = det_vld_sr[5];
 
-    candidate_buffer u_candbuf (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .score_valid  (score_valid),
-        .score_x      (score_x),
-        .score_value  (score_value),
-        .row_start    (score_row_start),
-        .row_done     (score_row_done),
-        .frame_clear  (frame_clear),
-        .nms_done     (nms_done),
-        .nms_done_bank(nms_done_bank),
-        .rd_en_0      (cb_rd_en_0),
-        .rd_addr_0    (cb_rd_addr_0),
-        .rd_data_0    (cb_rd_data_0),
-        .rd_en_1      (cb_rd_en_1),
-        .rd_addr_1    (cb_rd_addr_1),
-        .rd_data_1    (cb_rd_data_1),
-        .rd_en_2      (cb_rd_en_2),
-        .rd_addr_2    (cb_rd_addr_2),
-        .rd_data_2    (cb_rd_data_2),
-        .bank_ready   (bank_ready),
-        .bank_count_0 (bank_count_0),
-        .bank_count_1 (bank_count_1),
-        .bank_count_2 (bank_count_2),
-        .bank_row_0   (bank_row_0),
-        .bank_row_1   (bank_row_1),
-        .bank_row_2   (bank_row_2),
-        .bank_state_0 (bank_state_0),
-        .bank_state_1 (bank_state_1),
-        .bank_state_2 (bank_state_2),
-        .dbg_wr_bank  ()
-    );
+    wire       nms_kp_valid;
+    wire [9:0] nms_kp_x;
+    wire [8:0] nms_kp_y;
+    wire [7:0] nms_kp_score;
 
-    wire        kp_valid;
-    wire [27:0] kp_data;
-    wire        kp_ready;
-
-    nms_top u_nms (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .bank_ready   (bank_ready),
-        .bank_count_0 (bank_count_0),
-        .bank_count_1 (bank_count_1),
-        .bank_count_2 (bank_count_2),
-        .bank_row_0   (bank_row_0),
-        .bank_row_1   (bank_row_1),
-        .bank_row_2   (bank_row_2),
-        .bank_state_0 (bank_state_0),
-        .bank_state_1 (bank_state_1),
-        .bank_state_2 (bank_state_2),
-        .rd_en_0      (cb_rd_en_0),
-        .rd_addr_0    (cb_rd_addr_0),
-        .rd_data_0    (cb_rd_data_0),
-        .rd_en_1      (cb_rd_en_1),
-        .rd_addr_1    (cb_rd_addr_1),
-        .rd_data_1    (cb_rd_data_1),
-        .rd_en_2      (cb_rd_en_2),
-        .rd_addr_2    (cb_rd_addr_2),
-        .rd_data_2    (cb_rd_data_2),
-        .nms_done     (nms_done),
-        .nms_done_bank(nms_done_bank),
-        .kp_valid     (kp_valid),
-        .kp_data      (kp_data),
-        .kp_ready     (kp_ready),
-        .nms_busy     (nms_busy)
-    );
-
-    wire [10:0] kp_count;
-    wire        kp_rd_en;
-    wire [9:0]  kp_rd_addr;
-    wire [26:0] kp_rd_data;
-
-    keypoint_buffer #(
-        .ADDR_W   (10),
-        .Y_OFFSET (3)
-    ) u_kpbuf (
-        .clk      (clk),
-        .rst_n    (rst_n),
-        .clear    (kp_clear),
-        .kp_valid (kp_valid),
-        .kp_data  (kp_data),
-        .kp_ready (kp_ready),
-        .kp_count (kp_count),
-        .overflow (kp_overflow),
-        .rd_en    (kp_rd_en),
-        .rd_addr  (kp_rd_addr),
-        .rd_data  (kp_rd_data)
-    );
-
-    // ========================================================================
-    // Huong (intensity centroid) + rBRIEF
-    // ========================================================================
-    wire        ori_busy;
-
-    wire        pr_start;
-    wire [9:0]  pr_kx;
-    wire [8:0]  pr_ky;
-    wire        pr_busy;
-    wire        pr_done;
-    wire        pr_error;
-
-    wire        acc_clear;
-    wire        mom_valid;
-
-    wire        ang_start;
-    wire        ang_done;
-    wire [4:0]  ang_bin;
-
-    wire        gauss_done;
-
-    wire        rb_start;
-    wire [4:0]  rb_angle;
-    wire        rb_done;
-    wire [255:0] rb_desc;
-
-    centroid_ctrl #(
-        .ADDR_W (10)
-    ) u_cctrl (
+    nms_stream_v3 #(
+        .IMG_W      (598),              // 640 - 2*21
+        .IMG_H      (438),              // 480 - 2*21
+        .ADDR_WIDTH (10)
+    ) u_nms (
         .clk        (clk),
         .rst_n      (rst_n),
-        .ori_start  (ori_start),
-        .kp_count   (kp_count),
-        .ori_busy   (ori_busy),
-        .ori_done   (ori_done),
-        .out_count  (out_count),
-        .kp_rd_en   (kp_rd_en),
-        .kp_rd_addr (kp_rd_addr),
-        .kp_rd_data (kp_rd_data),
-        .sram_req   (),
-        .sram_gnt   (sram_gnt),
-        .rd_start   (pr_start),
-        .rd_kx      (pr_kx),
-        .rd_ky      (pr_ky),
-        .rd_busy    (pr_busy),
-        .rd_done    (pr_done),
-        .rd_error   (pr_error),
-        .acc_clear  (acc_clear),
-        .mom_valid  (mom_valid),
-        .ang_start  (ang_start),
-        .ang_done   (ang_done),
-        .ang_bin    (ang_bin),
-        .gauss_done (gauss_done),
-        .rb_start   (rb_start),
-        .rb_angle   (rb_angle),
-        .rb_done    (rb_done),
-        .rb_desc    (rb_desc),
-        .out_we     (out_we),
-        .out_addr   (out_addr),
-        .out_x      (out_x),
-        .out_y      (out_y),
-        .out_score  (out_score),
-        .out_angle  (out_angle),
-        .out_desc   (out_desc)
+        .pix_valid  (nms_pix_valid),
+        .in_score   (score_value),
+        .in_valid   (score_valid),
+        .frame_done (nms_frame_done),
+        .kp_valid   (nms_kp_valid),
+        .kp_x       (nms_kp_x),
+        .kp_y       (nms_kp_y),
+        .kp_score   (nms_kp_score),
+        .flush_done (nms_flush_done)
     );
 
-    wire        pb_we;
-    wire [5:0]  pb_row;
-    wire [4:0]  pb_word;
-    wire [10:0] pb_addr;
-    wire [15:0] pb_wdata;
-    wire        patch_x0_odd;
+    // Buffer luu danh sach keypoint (1024 x 27-bit M4K) giua NMS va Centroid
+    // Dinh dang 27-bit: {score[7:0], y_abs[8:0], x_abs[9:0]}
+    (* ramstyle = "M4K" *) reg [26:0] kp_mem [0:MAX_KP-1];
+    reg  [ADDR_W:0] kp_count;
+    wire            kp_rd_en;
+    wire [ADDR_W-1:0] kp_rd_addr;
+    reg  [26:0]     kp_rd_data;
 
-    centroid_patch_reader u_patch (
+    wire [9:0] abs_kp_x = nms_kp_x + 10'd21;
+    wire [8:0] abs_kp_y = nms_kp_y + 9'd21;
+    wire       kp_can_wr = nms_kp_valid && (kp_count < MAX_KP[ADDR_W:0]);
+
+    always @(posedge clk) begin
+        if (kp_can_wr)
+            kp_mem[kp_count[ADDR_W-1:0]] <= {nms_kp_score, abs_kp_y, abs_kp_x};
+        if (kp_rd_en)
+            kp_rd_data <= kp_mem[kp_rd_addr];
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            kp_count    <= {(ADDR_W+1){1'b0}};
+            kp_overflow <= 1'b0;
+        end else if (kp_clear) begin
+            kp_count    <= {(ADDR_W+1){1'b0}};
+            kp_overflow <= 1'b0;
+        end else if (nms_kp_valid) begin
+            if (kp_count < MAX_KP[ADDR_W:0])
+                kp_count <= kp_count + {{ADDR_W{1'b0}}, 1'b1};
+            else
+                kp_overflow <= 1'b1;
+        end
+    end
+
+    // ========================================================================
+    // 6. Intensity Centroid + rBRIEF Descriptor Pipeline
+    // ========================================================================
+    orb_descriptor_top #(
+        .ADDR_W (ADDR_W),
+        .P      (8),
+        .K0     (18),
+        .K1     (34),
+        .K2     (48),
+        .K3     (56)
+    ) u_desc_top (
         .clk          (clk),
         .rst_n        (rst_n),
-        .start        (pr_start),
-        .kx           (pr_kx),
-        .ky           (pr_ky),
-        .busy         (pr_busy),
-        .done         (pr_done),
-        .error        (pr_error),
+        .ori_start    (ori_start),
+        .kp_count     (kp_count),
+        .ori_busy     (),
+        .ori_done     (ori_done),
+        .out_count    (out_count),
+        .kp_rd_en     (kp_rd_en),
+        .kp_rd_addr   (kp_rd_addr),
+        .kp_rd_data   (kp_rd_data),
+        .sram_req     (),
+        .sram_gnt     (sram_gnt),
         .sram_addr    (pr_sram_addr),
         .sram_re      (pr_sram_re),
         .sram_rd_data (m_rd_data),
         .sram_valid   (pr_sram_valid),
-        .pb_we        (pb_we),
-        .pb_row       (pb_row),
-        .pb_word      (pb_word),
-        .pb_addr      (pb_addr),
-        .pb_wdata     (pb_wdata),
-        .patch_x0_odd (patch_x0_odd)
+        .out_we       (out_we),
+        .out_addr     (out_addr),
+        .out_x        (out_x),
+        .out_y        (out_y),
+        .out_score    (out_score),
+        .out_angle    (out_angle),
+        .out_desc     (out_desc)
     );
-
-    wire signed [23:0] m10;
-    wire signed [23:0] m01;
-
-    centroid_moment_accumulator u_moment (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .clear        (acc_clear),
-        .patch_done   (pr_done),
-        .pb_we        (pb_we),
-        .pb_row       (pb_row),
-        .pb_word      (pb_word),
-        .pb_wdata     (pb_wdata),
-        .patch_x0_odd (patch_x0_odd),
-        .m10          (m10),
-        .m01          (m01),
-        .mom_valid    (mom_valid)
-    );
-
-    centroid_angle u_angle (
-        .clk       (clk),
-        .rst_n     (rst_n),
-        .start     (ang_start),
-        .m10       (m10),
-        .m01       (m01),
-        .busy      (),
-        .done      (ang_done),
-        .angle_bin (ang_bin)
-    );
-
-    wire        sm_we;
-    wire [10:0] sm_waddr;
-    wire [7:0]  sm_wdata;
-
-    rbrief_gauss_window u_gauss (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .pb_we        (pb_we),
-        .pb_row       (pb_row),
-        .pb_word      (pb_word),
-        .pb_wdata     (pb_wdata),
-        .patch_x0_odd (patch_x0_odd),
-        .patch_done   (pr_done),
-        .busy         (),
-        .done         (gauss_done),
-        .sm_we        (sm_we),
-        .sm_waddr     (sm_waddr),
-        .sm_wdata     (sm_wdata)
-    );
-
-    rbrief_descriptor u_rbrief (
-        .clk       (clk),
-        .rst_n     (rst_n),
-        .sm_we     (sm_we),
-        .sm_waddr  (sm_waddr),
-        .sm_wdata  (sm_wdata),
-        .start     (rb_start),
-        .angle_bin (rb_angle),
-        .busy      (),
-        .done      (rb_done),
-        .desc      (rb_desc)
-    );
-
-    // ------------------------------------------------------------------
-    // Ghi chu: image_dma khong duoc noi vao top. Module nay doc/ghi tung byte
-    // (dia chi byte 19 bit, du lieu 8 bit) trong khi sram_controller la
-    // 16 bit va UB/LB luon = 0, nen ghi 1 byte se de len ca word. Muon dung
-    // phai co them bo doc-sua-ghi (read-modify-write) theo word.
-    // ------------------------------------------------------------------
 
 endmodule

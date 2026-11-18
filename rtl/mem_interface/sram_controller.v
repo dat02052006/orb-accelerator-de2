@@ -43,15 +43,15 @@ module sram_controller #(
     // Ma hoa trang thai: one-hot (output giai ma sach, han che glitch
     // tren WE_N/OE_N/CE_N ra chan vat ly)
     // ------------------------------------------------------------------
-    localparam [6:0] S_IDLE      = 7'b0000001,
-                     S_WR_SETUP  = 7'b0000010,  // dua addr/data, WE_N = 1
-                     S_WR_PULSE  = 7'b0000100,  // WE_N = 0
-                     S_WR_HOLD   = 7'b0001000,  // WE_N = 1, giu addr/data, bao done
-                     S_RD_ACCESS = 7'b0010000,  // OE_N = 0, cho tAA
-                     S_RD_LATCH  = 7'b0100000,  // chot SRAM_DQ vao rd_data
-                     S_RD_DONE   = 7'b1000000;  // valid = 1, done = 1
+    localparam [2:0] S_IDLE      = 3'd0,
+                     S_WR_SETUP  = 3'd1,  // dua addr/data, WE_N = 1
+                     S_WR_PULSE  = 3'd2,  // WE_N = 0
+                     S_WR_HOLD   = 3'd3,  // WE_N = 1, giu addr/data, bao done
+                     S_RD_ACCESS = 3'd4,  // OE_N = 0, cho tAA
+                     S_RD_LATCH  = 3'd5,  // chot SRAM_DQ vao rd_data
+                     S_RD_DONE   = 3'd6;  // valid = 1, done = 1
 
-    reg [6:0]        state, next_state;
+    reg [2:0]        state, next_state;
     reg [3:0]        wait_cnt;
     reg [ADDR_W-1:0] addr_reg;
     reg [DATA_W-1:0] wr_data_reg;

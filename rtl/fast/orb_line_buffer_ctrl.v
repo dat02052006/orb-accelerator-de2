@@ -30,11 +30,11 @@ module orb_line_buffer_ctrl (
     output reg  [7:0]   win_p0, win_p1, win_p2, win_p3, win_p4, win_p5, win_p6  // theo hang logic
 );
 
-    localparam [8:0] FIRST_CENTER = 9'd3;
-    localparam [8:0] LAST_CENTER  = 9'd476;      // 480 - 4
-    localparam [9:0] LAST_COL     = 10'd639;
-    localparam [2:0] FLUSH_LAST   = 3'd3;
-
+    localparam [8:0] FIRST_CENTER = 9'd21;      // Bỏ 21 hàng đầu (0..20)
+    localparam [8:0] LAST_CENTER  = 9'd458;     // 480 - 22 = 458 (Bỏ 21 hàng cuối: 459..479)
+    localparam [9:0] FIRST_COL    = 10'd0;      // Đọc từ cột cục bộ 0 của Line Buffer (= pixel 18 ảnh gốc)
+    localparam [9:0] LAST_COL     = 10'd603;    // Đọc tới cột cục bộ 603 (= pixel 621 ảnh gốc)
+    localparam [2:0] FLUSH_LAST   = 3'd3;       // Flush 3 nhịp bán kính cửa sổ 7x7
     // ---------------- state encoding ----------------
     localparam [3:0] S_IDLE        = 4'd0,
                      S_LOAD_REQ    = 4'd1,
@@ -100,7 +100,7 @@ module orb_line_buffer_ctrl (
         if (!rst_n) begin
             center_y  <= FIRST_CENTER;
             base      <= 3'd0;
-            col_cnt   <= 10'd0;
+            col_cnt   <= FIRST_COL;
             flush_cnt <= 3'd0;
         end else begin
             case (state)
@@ -111,7 +111,7 @@ module orb_line_buffer_ctrl (
                     end
                 end
                 S_SCAN_CLR: begin
-                    col_cnt <= 10'd0;
+                    col_cnt <= FIRST_COL;
                 end
                 S_SCAN: begin
                     col_cnt   <= col_cnt + 10'd1;
@@ -136,7 +136,7 @@ module orb_line_buffer_ctrl (
     // FSM phan 3: combinational output logic
     // ======================================================
     assign ir_start      = (state == S_LOAD_REQ) || (state == S_REFILL_REQ);
-    assign ir_first_row  = (state == S_LOAD_REQ) ? 9'd0 : (center_y + 9'd4);
+    assign ir_first_row = (state == S_LOAD_REQ) ? (FIRST_CENTER - 9'd3) : (center_y + 9'd4);
     assign ir_first_bank = (state == S_LOAD_REQ) ? 5'd0 : {2'b00, base};
     assign ir_num_rows   = (state == S_LOAD_REQ) ? 5'd7 : 5'd1;
 

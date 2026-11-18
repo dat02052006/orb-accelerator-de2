@@ -28,7 +28,8 @@ module image_reader #(
     output wire [15:0] lb_wdata         // [7:0] = pixel cot chan, [15:8] = pixel cot le
 );
 
-    localparam [8:0] LAST_COL_WORD = 9'd319;       // 640/2 - 1
+    localparam [8:0] FIRST_COL_WORD = 9'd9;   // Pixel 18 / 2 = 9
+	 localparam [8:0] LAST_COL_WORD  = 9'd310; // Pixel 621 / 2 = 310
     localparam [9:0] IMG_HEIGHT    = 10'd480;
     localparam [5:0] BANKS         = NUM_BANKS;
 
@@ -97,6 +98,21 @@ module image_reader #(
     end
 
     // ======================================================
+    // FSM phan 3: combinational output logic
+    // ======================================================
+    assign sram_re     = (state == S_READ);
+    assign sram_addr   = row_base + {9'd0, col_cnt};
+
+    assign lb_we       = (state == S_STORE);
+    assign lb_row      = first_bank_r + row_cnt;   // bank dich = bank dau + hang dang nap
+    assign lb_col_word = col_cnt - FIRST_COL_WORD; // Chạy gọn từ 0..301
+    assign lb_wdata    = data_r;         // [7:0] pixel chan, [15:8] pixel le
+
+    assign busy        = (state != S_IDLE);
+    assign done        = (state == S_DONE);
+    assign error       = (state == S_ERROR);
+	 
+	 // ======================================================
     // Datapath: dem cot/hang, tinh dia chi, chot du lieu
     // ======================================================
     always @(posedge clk or negedge rst_n) begin
@@ -104,7 +120,7 @@ module image_reader #(
             num_rows_r   <= 5'd0;
             first_bank_r <= 5'd0;
             row_base     <= 18'd0;
-            col_cnt      <= 9'd0;
+            col_cnt      <= FIRST_COL_WORD;
             row_cnt      <= 5'd0;
             data_r       <= 16'd0;
         end else begin
@@ -118,7 +134,7 @@ module image_reader #(
                     row_base <= first_row_base;
                 end
                 S_INIT: begin
-                    col_cnt <= 9'd0;
+                    col_cnt <= FIRST_COL_WORD;
                     row_cnt <= 5'd0;
                 end
                 S_READ: begin
@@ -126,7 +142,7 @@ module image_reader #(
                 end
                 S_STORE: begin
                     if (last_col) begin
-                        col_cnt  <= 9'd0;
+                        col_cnt  <= FIRST_COL_WORD;
                         row_cnt  <= row_cnt + 5'd1;
                         row_base <= row_base + 18'd320;
                     end else begin
@@ -137,20 +153,5 @@ module image_reader #(
             endcase
         end
     end
-
-    // ======================================================
-    // FSM phan 3: combinational output logic
-    // ======================================================
-    assign sram_re     = (state == S_READ);
-    assign sram_addr   = row_base + {9'd0, col_cnt};
-
-    assign lb_we       = (state == S_STORE);
-    assign lb_row      = first_bank_r + row_cnt;   // bank dich = bank dau + hang dang nap
-    assign lb_col_word = col_cnt;
-    assign lb_wdata    = data_r;         // [7:0] pixel chan, [15:8] pixel le
-
-    assign busy        = (state != S_IDLE);
-    assign done        = (state == S_DONE);
-    assign error       = (state == S_ERROR);
 
 endmodule

@@ -101,6 +101,24 @@ module centroid_angle (
         else        state <= next_state;
     end
 
+	 // ======================================================
+    // FSM phan 3: combinational output logic
+    // ======================================================
+    reg [4:0] bin_c;
+    always @(*) begin
+        case ({neg_x, neg_y})
+            2'b00:   bin_c = {2'b00, q};
+            2'b01:   bin_c = (q == 3'd0) ? 5'd0 : (5'd30 - {2'b00, q});
+            2'b10:   bin_c = 5'd15 - {2'b00, q};
+            default: bin_c = 5'd15 + {2'b00, q};
+        endcase
+    end
+
+    assign angle_bin = bin_c;
+    assign busy      = (state != S_IDLE);
+    assign done      = (state == S_DONE);
+
+	 
     // ======================================================
     // Datapath
     // ======================================================
@@ -140,22 +158,4 @@ module centroid_angle (
             endcase
         end
     end
-
-    // ======================================================
-    // FSM phan 3: combinational output logic
-    // ======================================================
-    reg [4:0] bin_c;
-    always @(*) begin
-        case ({neg_x, neg_y})
-            2'b00:   bin_c = {2'b00, q};
-            2'b01:   bin_c = (q == 3'd0) ? 5'd0 : (5'd30 - {2'b00, q});
-            2'b10:   bin_c = 5'd15 - {2'b00, q};
-            default: bin_c = 5'd15 + {2'b00, q};
-        endcase
-    end
-
-    assign angle_bin = bin_c;
-    assign busy      = (state != S_IDLE);
-    assign done      = (state == S_DONE);
-
 endmodule

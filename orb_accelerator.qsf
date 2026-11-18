@@ -474,41 +474,35 @@ set_location_assignment PIN_V24 -to GPIO_1[32]
 set_location_assignment PIN_V23 -to GPIO_1[33]
 set_location_assignment PIN_W25 -to GPIO_1[34]
 set_location_assignment PIN_W23 -to GPIO_1[35]
-set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
-set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
-set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name VERILOG_FILE rtl/nms/nms_stream_v3.v
+set_global_assignment -name VERILOG_FILE rtl/descriptor/rbrief_gauss_window.v
+set_global_assignment -name VERILOG_FILE rtl/descriptor/rbrief_descriptor.v
+set_global_assignment -name VERILOG_FILE rtl/descriptor/centroid_patch_reader.v
+set_global_assignment -name VERILOG_FILE rtl/descriptor/centroid_moment_accumulator.v
+set_global_assignment -name VERILOG_FILE rtl/descriptor/centroid_ctrl.v
+set_global_assignment -name VERILOG_FILE rtl/descriptor/centroid_angle.v
+set_global_assignment -name VERILOG_FILE rtl/fast/orb_window_generator.v
+set_global_assignment -name VERILOG_FILE rtl/fast/orb_line_buffer_ctrl.v
+set_global_assignment -name VERILOG_FILE rtl/fast/orb_line_buffer.v
+set_global_assignment -name VERILOG_FILE rtl/fast/orb_fast_score.v
+set_global_assignment -name VERILOG_FILE rtl/fast/orb_fast_detector.v
+set_global_assignment -name VERILOG_FILE rtl/mem_interface/sram_controller.v
+set_global_assignment -name VERILOG_FILE rtl/mem_interface/loader_sram_pack.v
+set_global_assignment -name VERILOG_FILE rtl/mem_interface/image_reader.v
+set_global_assignment -name VERILOG_FILE rtl/mem_interface/image_loader.v
+set_global_assignment -name VERILOG_FILE rtl/top/orb_top.v
 set_global_assignment -name SDC_FILE orb_top.sdc
 set_global_assignment -name MIF_FILE rbrief_pattern.mif
 set_global_assignment -name QIP_FILE rom.qip
-set_global_assignment -name VERILOG_FILE rtl/centroid_angle.v
-set_global_assignment -name VERILOG_FILE rtl/rbrief_descriptor.v
-set_global_assignment -name VERILOG_FILE rtl/centroid_moment_accumulator.v
-set_global_assignment -name VERILOG_FILE rtl/centroid_ctrl.v
-set_global_assignment -name VERILOG_FILE rtl/orb_fast_score.v
-set_global_assignment -name VERILOG_FILE rtl/keypoint_buffer.v
-set_global_assignment -name VERILOG_FILE rtl/orb_top.v
-set_global_assignment -name VERILOG_FILE rtl/loader_sram_pack.v
-set_global_assignment -name VERILOG_FILE rtl/rbrief_gauss_window.v
-set_global_assignment -name VERILOG_FILE rtl/centroid_patch_reader.v
-set_global_assignment -name VERILOG_FILE rtl/centroid_window_generator.v
-set_global_assignment -name VERILOG_FILE rtl/centroid_line_buffer_ctrl.v
-set_global_assignment -name VERILOG_FILE rtl/centroid_line_buffer.v
-set_global_assignment -name VERILOG_FILE rtl/nms_top.v
-set_global_assignment -name VERILOG_FILE rtl/nms_neighbor_search.v
-set_global_assignment -name VERILOG_FILE rtl/nms_controller.v
-set_global_assignment -name VERILOG_FILE rtl/nms_comparator.v
-set_global_assignment -name VERILOG_FILE rtl/candidate_buffer_controller.v
-set_global_assignment -name VERILOG_FILE rtl/candidate_buffer.v
-set_global_assignment -name VERILOG_FILE rtl/candidate_bank.v
-set_global_assignment -name VERILOG_FILE rtl/orb_fast_detector.v
-set_global_assignment -name VERILOG_FILE rtl/top_loader_system.v
-set_global_assignment -name VERILOG_FILE rtl/sram_controller.v
-set_global_assignment -name VERILOG_FILE rtl/orb_window_generator.v
-set_global_assignment -name VERILOG_FILE rtl/orb_line_buffer_ctrl.v
-set_global_assignment -name VERILOG_FILE rtl/orb_line_buffer.v
-set_global_assignment -name VERILOG_FILE rtl/image_reader.v
-set_global_assignment -name VERILOG_FILE rtl/image_loader.v
-set_global_assignment -name VERILOG_FILE rtl/image_dma.v
-set_global_assignment -name VERILOG_FILE rtl/keypoint_selector.v
 set_global_assignment -name VERILOG_FILE rom.v
+set_global_assignment -name VERILOG_FILE sim/tb_fast_score.v
+set_global_assignment -name VERILOG_FILE sim/tb_orb_fast_detector.v
+set_global_assignment -name VERILOG_FILE sim/mem_interface/sram_image_subsystem_top.v
+set_global_assignment -name VERILOG_FILE rtl/mem_interface/sram_image_subsystem_top.v
+set_global_assignment -name VERILOG_FILE sim/mem_interface/tb_sram_image_subsystem.v
+set_global_assignment -name VERILOG_FILE sim/mem_interface/sram_model.v
+set_global_assignment -name VERILOG_FILE rtl/descriptor/orb_descriptor_top.v
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
