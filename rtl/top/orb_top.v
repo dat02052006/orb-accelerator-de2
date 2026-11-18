@@ -1,52 +1,54 @@
 // ============================================================================
 // orb_top.v
-// Top-level ORB accelerator (Cyclone II / DE2): ket noi toan bo he thong.
-//   Nios II -> image_loader -> loader_sram_pack --\
-//                                                  +--> sram_controller <-> SRAM
-//   image_reader (FAST) ---------------------------+ (mux theo pha)
-//   centroid_patch_reader --------------------------/
-//
-//   Pipeline xu ly anh:
-//   image_reader -> orb_line_buffer -> orb_line_buffer_ctrl -> orb_window_generator
-//     -> orb_fast_detector -> orb_fast_score -> nms_stream_v3
-//     -> keypoint_mem (M4K) -> centroid_ctrl -> { centroid_patch_reader,
-//        centroid_moment_accumulator, centroid_angle, rbrief_gauss_window,
-//        rbrief_descriptor } -> ket qua (out_*)
+// Top-level ORB accelerator (Cyclone II / DE2): ket noi toan bo he thong,
+// bao gom Result Packer (288b -> 18x16b), Result FIFO (scfifo show-ahead)
+// va Avalon-MM Master DMA ghi ket qua ra SDRAM.
 // ============================================================================
 module orb_top #(
-    parameter ADDR_W    = 11,           // Do sau buffer keypoint: 2^10 = 1024
-    parameter DRAIN_CYC = 16            // So chu ky xa pipeline FAST/score sau frame_done
+    parameter ADDR_W        = 11,       // Do sau buffer keypoint: 2^11 = 2048
+    parameter DRAIN_CYC     = 16,       // So chu ky xa pipeline FAST/score sau frame_done
+    parameter DMA_BURST_LEN = 1         // 1 cho Qsys SDR SDRAM controller; 8 neu qua burst bridge
 )(
     input  wire         clk,
     input  wire         rst_n,
 
-    // ---- Nios II: nap anh ----
-    input  wire         load_start,     // xung: bat dau nap anh moi
-    input  wire [9:0]   img_width,      // phai = 640
-    input  wire [9:0]   img_height,     // phai = 480
-    input  wire         pixel_valid,
-    input  wire [7:0]   pixel_data,
-    output wire         pixel_ready,
-    output wire         image_loaded,   // muc 1 khi da nap du 307200 byte
-    output wire         size_error,
+    // ---- Avalon-MM slave: cua so anh (tu JTAG-to-Avalon Master / DMA) ----
+    input  wire [17:0]  avs_mem_address,        // dia chi word
+    input  wire         avs_mem_write,
+    input  wire [15:0]  avs_mem_writedata,
+    input  wire [1:0]   avs_mem_byteenable,     // khong dung
+    output wire         avs_mem_waitrequest,
 
-    // ---- Nios II: dieu khien xu ly ----
+    // ---- Avalon-MM slave: thanh ghi nap anh ----
+    input  wire [1:0]   avs_ctrl_address,
+    input  wire         avs_ctrl_write,
+    input  wire [15:0]  avs_ctrl_writedata,
+    input  wire         avs_ctrl_read,
+    output wire [15:0]  avs_ctrl_readdata,
+
+    // ---- Trang thai nap anh ----
+    output wire         image_loaded,   // = load_done: muc 1 khi da nap xong anh
+    output wire         load_mode,      // muc 1 khi dang o che do nap anh
+
+    // ---- Nios II: dieu khien xu ly & cau hinh DMA ----
     input  wire         orb_start,      // xung: xu ly 1 frame (bo qua neu chua san sang)
     input  wire [7:0]   fast_threshold, // nguong FAST T
-    output wire         orb_busy,
-    output wire         orb_done,       // xung 1 chu ky: xong frame
+    input  wire [31:0]  dma_base_addr,  // dia chi byte bat dau luu ket qua tren SDRAM
+    output wire         orb_busy,       // muc 1 tu luc bat dau den khi DMA ghi xong SDRAM
+    output wire         orb_done,       // xung 1 chu ky: xong toan bo frame + DMA
     output wire         orb_error,      // xung 1 chu ky: loi line buffer / image_reader
-    output reg          kp_overflow,    // muc 1 neu so keypoint > 1024
+    output reg          kp_overflow,    // muc 1 neu so keypoint > 2^ADDR_W
+    output wire         packer_overflow,// muc 1 neu out_we den chong cheo < 18 chu ky
+    output wire [11:0]  out_count,      // so keypoint da trich xuat
+    output wire [31:0]  words_written,  // tong so word 16-bit DMA da ghi ra SDRAM
 
-    // ---- Ket qua dau ra (tu centroid_ctrl) ----
-    output wire         out_we,
-    output wire [10:0]   out_addr,
-    output wire [9:0]   out_x,
-    output wire [8:0]   out_y,
-    output wire [7:0]   out_score,
-    output wire [4:0]   out_angle,
-    output wire [255:0] out_desc,
-    output wire [11:0]  out_count,      // so keypoint da ghi ra
+    // ---- Avalon-MM master: ghi ket qua keypoint ra SDRAM ----
+    output wire [31:0]  avm_address,
+    output wire         avm_write,
+    output wire [15:0]  avm_writedata,
+    output wire [1:0]   avm_byteenable,
+    output wire [7:0]   avm_burstcount,
+    input  wire         avm_waitrequest,
 
     // ---- Chan vat ly SRAM (DE2) ----
     output wire [17:0]  sram_addr,
@@ -58,7 +60,8 @@ module orb_top #(
     output wire         sram_lb_n
 );
 
-    localparam integer MAX_KP = (1 << ADDR_W); // 1024
+    localparam integer MAX_KP = (1 << ADDR_W); // 2048
+    wire rst_h = ~rst_n;                       // reset dong bo active-high cho cac khoi dung rst
 
     // ========================================================================
     // 1. FSM dieu khien toan khung hinh (Frame-level Master Controller)
@@ -71,8 +74,9 @@ module orb_top #(
                      T_NMS_WAIT    = 4'd5,
                      T_ORI_START   = 4'd6,
                      T_ORI_WAIT    = 4'd7,
-                     T_DONE        = 4'd8,
-                     T_ERR         = 4'd9;
+                     T_DMA_WAIT    = 4'd8,
+                     T_DONE        = 4'd9,
+                     T_ERR         = 4'd10;
 
     reg [3:0] state, next_state;
     reg [4:0] drain_cnt;
@@ -83,6 +87,7 @@ module orb_top #(
     wire lb_error;
     wire nms_flush_done;
     wire ori_done;
+    wire dma_done;
 
     wire drain_end = (drain_cnt == (DRAIN_CYC - 1));
 
@@ -91,7 +96,7 @@ module orb_top #(
         next_state = state;
         case (state)
             T_IDLE: begin
-                if (orb_start && image_loaded && nms_ready)
+                if (orb_start && image_loaded && !load_mode && nms_ready)
                     next_state = T_START;
             end
             T_START:     next_state = T_SCAN;
@@ -108,7 +113,10 @@ module orb_top #(
             end
             T_ORI_START: next_state = T_ORI_WAIT;
             T_ORI_WAIT: begin
-                if (ori_done) next_state = T_DONE;
+                if (ori_done) next_state = T_DMA_WAIT;
+            end
+            T_DMA_WAIT: begin
+                if (dma_done) next_state = T_DONE;
             end
             T_DONE:      next_state = T_IDLE;
             T_ERR:       next_state = T_IDLE;
@@ -126,7 +134,7 @@ module orb_top #(
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             drain_cnt <= 5'd0;
-            nms_ready <= 1'b0;
+            nms_ready <= 1'b1;          // san sang ngay sau reset
         end else begin
             if (state == T_DRAIN)
                 drain_cnt <= drain_end ? 5'd0 : (drain_cnt + 5'd1);
@@ -141,8 +149,9 @@ module orb_top #(
     end
 
     // FSM phan 3: output logic
-    wire kp_clear       = (state == T_START);
-    wire lb_start       = (state == T_START);
+    wire frame_start    = (state == T_START);
+    wire kp_clear       = frame_start;
+    wire lb_start       = frame_start;
     wire nms_frame_done = (state == T_NMS_FLUSH);
     wire ori_start      = (state == T_ORI_START);
 
@@ -155,17 +164,39 @@ module orb_top #(
     assign orb_error = (state == T_ERR);
 
     // ========================================================================
-    // 2. SRAM Controller + Mux 3 chu so huu (Loader / FAST / Centroid)
+    // 2. Nap anh tu PC qua JTAG (avs_img_loader)
     // ========================================================================
-    wire [18:0] ld_addr;
-    wire [7:0]  ld_wdata;
-    wire        ld_we;
-    wire        ld_ready;
+    wire        wr_req;
+    wire [17:0] wr_addr;
+    wire [15:0] wr_data;
+    wire        wr_ack;
 
-    wire [17:0] pk_addr;
-    wire [15:0] pk_wdata;
-    wire        pk_we;
+    avs_img_loader #(
+        .ADDR_W (18)
+    ) u_avs_loader (
+        .clk                (clk),
+        .rst                (rst_h),
+        .avs_mem_address    (avs_mem_address),
+        .avs_mem_write      (avs_mem_write),
+        .avs_mem_writedata  (avs_mem_writedata),
+        .avs_mem_byteenable (avs_mem_byteenable),
+        .avs_mem_waitrequest(avs_mem_waitrequest),
+        .avs_ctrl_address   (avs_ctrl_address),
+        .avs_ctrl_write     (avs_ctrl_write),
+        .avs_ctrl_writedata (avs_ctrl_writedata),
+        .avs_ctrl_read      (avs_ctrl_read),
+        .avs_ctrl_readdata  (avs_ctrl_readdata),
+        .wr_req             (wr_req),
+        .wr_addr            (wr_addr),
+        .wr_data            (wr_data),
+        .wr_ack             (wr_ack),
+        .load_mode          (load_mode),
+        .load_done          (image_loaded)
+    );
 
+    // ========================================================================
+    // 3. SRAM Controller + Mux 3 chu so huu (Loader / FAST / Centroid)
+    // ========================================================================
     wire [17:0] ir_sram_addr;
     wire        ir_sram_re;
     wire        ir_sram_valid;
@@ -181,16 +212,21 @@ module orb_top #(
     wire [15:0] m_rd_data;
     wire        m_ready;
     wire        m_valid;
+    wire        m_done;
+
+    wire        ld_grant = load_mode & ~orb_busy;
 
     assign m_addr  = sel_ori  ? pr_sram_addr :
-                     sel_fast ? ir_sram_addr : pk_addr;
+                     sel_fast ? ir_sram_addr : wr_addr;
     assign m_re    = sel_ori  ? pr_sram_re   :
                      sel_fast ? ir_sram_re   : 1'b0;
-    assign m_we    = (sel_ori || sel_fast) ? 1'b0 : pk_we;
-    assign m_wdata = pk_wdata;
+    assign m_we    = ld_grant & wr_req;
+    assign m_wdata = wr_data;
 
     assign ir_sram_valid = m_valid & sel_fast;
     assign pr_sram_valid = m_valid & sel_ori;
+
+    assign wr_ack  = m_done & ~m_valid & ld_grant;
 
     sram_controller u_sram (
         .clk       (clk),
@@ -202,7 +238,7 @@ module orb_top #(
         .rd_data   (m_rd_data),
         .ready     (m_ready),
         .valid     (m_valid),
-        .done      (),
+        .done      (m_done),
         .sram_addr (sram_addr),
         .sram_dq   (sram_dq),
         .sram_ce_n (sram_ce_n),
@@ -210,39 +246,6 @@ module orb_top #(
         .sram_we_n (sram_we_n),
         .sram_ub_n (sram_ub_n),
         .sram_lb_n (sram_lb_n)
-    );
-
-    // ========================================================================
-    // 3. Giao tiep nap anh tu Nios II
-    // ========================================================================
-    image_loader u_loader (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .start        (load_start),
-        .img_width    (img_width),
-        .img_height   (img_height),
-        .pixel_valid  (pixel_valid),
-        .pixel_data   (pixel_data),
-        .pixel_ready  (pixel_ready),
-        .sram_addr    (ld_addr),
-        .sram_wr_data (ld_wdata),
-        .sram_we      (ld_we),
-        .sram_ready   (ld_ready),
-        .image_loaded (image_loaded),
-        .size_error   (size_error)
-    );
-
-    loader_sram_pack u_pack (
-        .clk      (clk),
-        .rst_n    (rst_n),
-        .ld_addr  (ld_addr),
-        .ld_wdata (ld_wdata),
-        .ld_we    (ld_we),
-        .ld_ready (ld_ready),
-        .sr_addr  (pk_addr),
-        .sr_wdata (pk_wdata),
-        .sr_we    (pk_we),
-        .sr_ready (m_ready)
     );
 
     // ========================================================================
@@ -413,7 +416,6 @@ module orb_top #(
     // ========================================================================
     // 5. NMS Streaming 3x3 (nms_stream_v3) + Keypoint Buffer (M4K)
     // ========================================================================
-    // Tre det_valid 6 chu ky de khop chinh xac voi do tre 6 stage cua orb_fast_score
     reg [5:0] det_vld_sr;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) det_vld_sr <= 6'd0;
@@ -444,8 +446,6 @@ module orb_top #(
         .flush_done (nms_flush_done)
     );
 
-    // Buffer luu danh sach keypoint (1024 x 27-bit M4K) giua NMS va Centroid
-    // Dinh dang 27-bit: {score[7:0], y_abs[8:0], x_abs[9:0]}
     (* ramstyle = "M4K" *) reg [26:0] kp_mem [0:MAX_KP-1];
     reg  [ADDR_W:0] kp_count;
     wire            kp_rd_en;
@@ -481,6 +481,13 @@ module orb_top #(
     // ========================================================================
     // 6. Intensity Centroid + rBRIEF Descriptor Pipeline
     // ========================================================================
+    wire         desc_out_we;
+    wire [9:0]   desc_out_x;
+    wire [8:0]   desc_out_y;
+    wire [7:0]   desc_out_score;
+    wire [4:0]   desc_out_angle;
+    wire [255:0] desc_out_desc;
+
     orb_descriptor_top #(
         .ADDR_W (ADDR_W),
         .P      (8),
@@ -505,13 +512,92 @@ module orb_top #(
         .sram_re      (pr_sram_re),
         .sram_rd_data (m_rd_data),
         .sram_valid   (pr_sram_valid),
-        .out_we       (out_we),
-        .out_addr     (out_addr),
-        .out_x        (out_x),
-        .out_y        (out_y),
-        .out_score    (out_score),
-        .out_angle    (out_angle),
-        .out_desc     (out_desc)
+        .out_we       (desc_out_we),
+        .out_addr     (),
+        .out_x        (desc_out_x),
+        .out_y        (desc_out_y),
+        .out_score    (desc_out_score),
+        .out_angle    (desc_out_angle),
+        .out_desc     (desc_out_desc)
+    );
+
+    // ========================================================================
+    // 7. Result Packer (288b -> 18x16b) + Result FIFO + Avalon-MM DMA Write
+    // ========================================================================
+    wire [15:0] res_fifo_wdata;
+    wire        res_fifo_wr;
+    wire        res_fifo_full;
+    wire [15:0] res_fifo_rdata;
+    wire        res_fifo_empty;
+    wire [9:0]  res_fifo_usedw;
+    wire        res_fifo_rd;
+    wire        dma_src_done;
+
+    orb_result_packer u_res_packer (
+        .clk             (clk),
+        .rst             (rst_h),
+        .start           (frame_start),
+        .orb_done        (ori_done),
+        .out_we          (desc_out_we),
+        .out_x           (desc_out_x),
+        .out_y           (desc_out_y),
+        .out_score       (desc_out_score),
+        .out_angle       (desc_out_angle),
+        .out_desc        (desc_out_desc),
+        .fifo_full       (res_fifo_full),
+        .fifo_wdata      (res_fifo_wdata),
+        .fifo_wr         (res_fifo_wr),
+        .src_done        (dma_src_done),
+        .packer_overflow (packer_overflow)
+    );
+
+    scfifo #(
+        .intended_device_family ("Cyclone II"),
+        .lpm_numwords           (1024),
+        .lpm_showahead          ("ON"),
+        .lpm_type               ("scfifo"),
+        .lpm_width              (16),
+        .lpm_widthu             (10),
+        .overflow_checking      ("ON"),
+        .underflow_checking     ("ON"),
+        .use_eab                ("ON")
+    ) u_res_fifo (
+        .clock (clk),
+        .sclr  (rst_h),
+        .data  (res_fifo_wdata),
+        .wrreq (res_fifo_wr),
+        .rdreq (res_fifo_rd),
+        .q     (res_fifo_rdata),
+        .empty (res_fifo_empty),
+        .full  (res_fifo_full),
+        .usedw (res_fifo_usedw)
+    );
+
+    orb_dma_write #(
+        .DATA_W    (16),
+        .ADDR_W    (32),
+        .BURST_LEN (DMA_BURST_LEN),
+        .FIFO_CW   (10)
+    ) u_dma_write (
+        .clk            (clk),
+        .rst            (rst_h),
+        .start          (frame_start),
+        .base_addr      (dma_base_addr),
+        .src_done       (dma_src_done),
+        .busy           (),
+        .done           (dma_done),
+        .words_written  (words_written),
+        .fifo_rdata     (res_fifo_rdata),
+        .fifo_empty     (res_fifo_empty),
+        .fifo_full      (res_fifo_full),
+        .fifo_count     (res_fifo_usedw),
+        .fifo_rd        (res_fifo_rd),
+        .avm_address    (avm_address),
+        .avm_write      (avm_write),
+        .avm_writedata  (avm_writedata),
+        .avm_byteenable (avm_byteenable),
+        .avm_burstcount (avm_burstcount),
+        .avm_waitrequest(avm_waitrequest)
     );
 
 endmodule

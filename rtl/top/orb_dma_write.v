@@ -3,8 +3,7 @@
 // Doc word tu result FIFO (show-ahead / FWFT) va ghi vao SDRAM qua Avalon-MM
 // master, theo tung burst BURST_LEN word, dia chi tang tuan tu.
 //
-//  - Chi bat dau 1 burst khi FIFO da co du BURST_LEN word (khong bi stall giua
-//    burst vi thieu du lieu).
+//  - Chi bat dau 1 burst khi FIFO da co du BURST_LEN word (hoac FIFO da full).
 //  - Khi src_done = 1 ma FIFO con le < BURST_LEN word: flush bang 1 burst, cac
 //    word thieu duoc dem 0.
 //  - Voi Qsys SDR SDRAM controller (khong ho tro burst that): dat BURST_LEN = 1.
@@ -31,6 +30,7 @@ module orb_dma_write #(
     // result FIFO (show-ahead)
     input  wire [DATA_W-1:0]    fifo_rdata,
     input  wire                 fifo_empty,
+    input  wire                 fifo_full,        // chong deadlock khi usedw tran ve 0
     input  wire [FIFO_CW-1:0]   fifo_count,
     output wire                 fifo_rd,
 
@@ -60,7 +60,7 @@ module orb_dma_write #(
 
     wire beat_accept      = (state == S_BURST) & ~avm_waitrequest;
     wire last_beat        = (beat_cnt == LAST_BEAT);
-    wire full_burst_ready = (fifo_count >= BURST_LEN);
+    wire full_burst_ready = fifo_full | (fifo_count >= BURST_LEN);
     wire flush_ready      = src_done & ~fifo_empty;
     wire all_drained      = src_done & fifo_empty;
 
