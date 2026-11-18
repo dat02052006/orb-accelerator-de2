@@ -1,4 +1,4 @@
-// megafunction wizard: %ROM: 1-PORT%VBB%
+// megafunction wizard: %ROM: 1-PORT%
 // GENERATION: STANDARD
 // VERSION: WM1.0
 // MODULE: altsyncram 
@@ -17,6 +17,7 @@
 // 13.0.1 Build 232 06/12/2013 SP 1 SJ Web Edition
 // ************************************************************
 
+
 //Copyright (C) 1991-2013 Altera Corporation
 //Your use of Altera Corporation's design tools, logic functions 
 //and other software and tools, and its AMPP partner logic 
@@ -31,14 +32,18 @@
 //Altera or its authorized distributors.  Please refer to the 
 //applicable agreement for further details.
 
+
+// synopsys translate_off
+`timescale 1 ps / 1 ps
+// synopsys translate_on
 module rom (
 	address,
 	clock,
 	q);
 
-	input	[12:0]  address;
+	input	[7:0]  address;
 	input	  clock;
-	output	[21:0]  q;
+	output	[23:0]  q;
 `ifndef ALTERA_RESERVED_QIS
 // synopsys translate_off
 `endif
@@ -46,6 +51,50 @@ module rom (
 `ifndef ALTERA_RESERVED_QIS
 // synopsys translate_on
 `endif
+
+	wire [23:0] sub_wire0;
+	wire [23:0] q = sub_wire0[23:0];
+
+	altsyncram	altsyncram_component (
+				.address_a (address),
+				.clock0 (clock),
+				.q_a (sub_wire0),
+				.aclr0 (1'b0),
+				.aclr1 (1'b0),
+				.address_b (1'b1),
+				.addressstall_a (1'b0),
+				.addressstall_b (1'b0),
+				.byteena_a (1'b1),
+				.byteena_b (1'b1),
+				.clock1 (1'b1),
+				.clocken0 (1'b1),
+				.clocken1 (1'b1),
+				.clocken2 (1'b1),
+				.clocken3 (1'b1),
+				.data_a ({24{1'b1}}),
+				.data_b (1'b1),
+				.eccstatus (),
+				.q_b (),
+				.rden_a (1'b1),
+				.rden_b (1'b1),
+				.wren_a (1'b0),
+				.wren_b (1'b0));
+	defparam
+		altsyncram_component.clock_enable_input_a = "BYPASS",
+		altsyncram_component.clock_enable_output_a = "BYPASS",
+		altsyncram_component.init_file = "rbrief_base.mif",
+		altsyncram_component.intended_device_family = "Cyclone II",
+		altsyncram_component.lpm_hint = "ENABLE_RUNTIME_MOD=NO",
+		altsyncram_component.lpm_type = "altsyncram",
+		altsyncram_component.numwords_a = 256,
+		altsyncram_component.operation_mode = "ROM",
+		altsyncram_component.outdata_aclr_a = "NONE",
+		altsyncram_component.outdata_reg_a = "CLOCK0",
+		altsyncram_component.ram_block_type = "M4K",
+		altsyncram_component.widthad_a = 8,
+		altsyncram_component.width_a = 24,
+		altsyncram_component.width_byteena_a = 1;
+
 
 endmodule
 
@@ -69,41 +118,42 @@ endmodule
 // Retrieval info: PRIVATE: JTAG_ENABLED NUMERIC "0"
 // Retrieval info: PRIVATE: JTAG_ID STRING "NONE"
 // Retrieval info: PRIVATE: MAXIMUM_DEPTH NUMERIC "0"
-// Retrieval info: PRIVATE: MIFfilename STRING "../rom/rbrief_pattern.mif"
-// Retrieval info: PRIVATE: NUMWORDS_A NUMERIC "7680"
-// Retrieval info: PRIVATE: RAM_BLOCK_TYPE NUMERIC "0"
+// Retrieval info: PRIVATE: MIFfilename STRING "rbrief_base.mif"
+// Retrieval info: PRIVATE: NUMWORDS_A NUMERIC "256"
+// Retrieval info: PRIVATE: RAM_BLOCK_TYPE NUMERIC "2"
 // Retrieval info: PRIVATE: RegAddr NUMERIC "1"
 // Retrieval info: PRIVATE: RegOutput NUMERIC "1"
 // Retrieval info: PRIVATE: SYNTH_WRAPPER_GEN_POSTFIX STRING "0"
 // Retrieval info: PRIVATE: SingleClock NUMERIC "1"
 // Retrieval info: PRIVATE: UseDQRAM NUMERIC "0"
-// Retrieval info: PRIVATE: WidthAddr NUMERIC "13"
-// Retrieval info: PRIVATE: WidthData NUMERIC "22"
+// Retrieval info: PRIVATE: WidthAddr NUMERIC "8"
+// Retrieval info: PRIVATE: WidthData NUMERIC "24"
 // Retrieval info: PRIVATE: rden NUMERIC "0"
 // Retrieval info: LIBRARY: altera_mf altera_mf.altera_mf_components.all
 // Retrieval info: CONSTANT: CLOCK_ENABLE_INPUT_A STRING "BYPASS"
 // Retrieval info: CONSTANT: CLOCK_ENABLE_OUTPUT_A STRING "BYPASS"
-// Retrieval info: CONSTANT: INIT_FILE STRING "../rom/rbrief_pattern.mif"
+// Retrieval info: CONSTANT: INIT_FILE STRING "rbrief_base.mif"
 // Retrieval info: CONSTANT: INTENDED_DEVICE_FAMILY STRING "Cyclone II"
 // Retrieval info: CONSTANT: LPM_HINT STRING "ENABLE_RUNTIME_MOD=NO"
 // Retrieval info: CONSTANT: LPM_TYPE STRING "altsyncram"
-// Retrieval info: CONSTANT: NUMWORDS_A NUMERIC "7680"
+// Retrieval info: CONSTANT: NUMWORDS_A NUMERIC "256"
 // Retrieval info: CONSTANT: OPERATION_MODE STRING "ROM"
 // Retrieval info: CONSTANT: OUTDATA_ACLR_A STRING "NONE"
 // Retrieval info: CONSTANT: OUTDATA_REG_A STRING "CLOCK0"
-// Retrieval info: CONSTANT: WIDTHAD_A NUMERIC "13"
-// Retrieval info: CONSTANT: WIDTH_A NUMERIC "22"
+// Retrieval info: CONSTANT: RAM_BLOCK_TYPE STRING "M4K"
+// Retrieval info: CONSTANT: WIDTHAD_A NUMERIC "8"
+// Retrieval info: CONSTANT: WIDTH_A NUMERIC "24"
 // Retrieval info: CONSTANT: WIDTH_BYTEENA_A NUMERIC "1"
-// Retrieval info: USED_PORT: address 0 0 13 0 INPUT NODEFVAL "address[12..0]"
+// Retrieval info: USED_PORT: address 0 0 8 0 INPUT NODEFVAL "address[7..0]"
 // Retrieval info: USED_PORT: clock 0 0 0 0 INPUT VCC "clock"
-// Retrieval info: USED_PORT: q 0 0 22 0 OUTPUT NODEFVAL "q[21..0]"
-// Retrieval info: CONNECT: @address_a 0 0 13 0 address 0 0 13 0
+// Retrieval info: USED_PORT: q 0 0 24 0 OUTPUT NODEFVAL "q[23..0]"
+// Retrieval info: CONNECT: @address_a 0 0 8 0 address 0 0 8 0
 // Retrieval info: CONNECT: @clock0 0 0 0 0 clock 0 0 0 0
-// Retrieval info: CONNECT: q 0 0 22 0 @q_a 0 0 22 0
+// Retrieval info: CONNECT: q 0 0 24 0 @q_a 0 0 24 0
 // Retrieval info: GEN_FILE: TYPE_NORMAL rom.v TRUE
 // Retrieval info: GEN_FILE: TYPE_NORMAL rom.inc FALSE
 // Retrieval info: GEN_FILE: TYPE_NORMAL rom.cmp FALSE
 // Retrieval info: GEN_FILE: TYPE_NORMAL rom.bsf FALSE
 // Retrieval info: GEN_FILE: TYPE_NORMAL rom_inst.v FALSE
-// Retrieval info: GEN_FILE: TYPE_NORMAL rom_bb.v TRUE
+// Retrieval info: GEN_FILE: TYPE_NORMAL rom_bb.v FALSE
 // Retrieval info: LIB_FILE: altera_mf

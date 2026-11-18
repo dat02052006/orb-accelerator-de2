@@ -474,6 +474,15 @@ set_location_assignment PIN_V24 -to GPIO_1[32]
 set_location_assignment PIN_V23 -to GPIO_1[33]
 set_location_assignment PIN_W25 -to GPIO_1[34]
 set_location_assignment PIN_W23 -to GPIO_1[35]
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name MIF_FILE rtl/descriptor/rbrief_base.mif
+set_global_assignment -name VERILOG_FILE rtl/descriptor/rom.v
+set_global_assignment -name VERILOG_FILE rtl/descriptor/rbrief_trig_rom.v
+set_global_assignment -name VERILOG_FILE rtl/top/sram_img_loader.v
+set_global_assignment -name VERILOG_FILE rtl/top/orb_dma_write.v
+set_global_assignment -name VERILOG_FILE rtl/top/avs_img_loader.v
 set_global_assignment -name VERILOG_FILE rtl/nms/nms_stream_v3.v
 set_global_assignment -name VERILOG_FILE rtl/descriptor/rbrief_gauss_window.v
 set_global_assignment -name VERILOG_FILE rtl/descriptor/rbrief_descriptor.v
@@ -492,17 +501,7 @@ set_global_assignment -name VERILOG_FILE rtl/mem_interface/image_reader.v
 set_global_assignment -name VERILOG_FILE rtl/mem_interface/image_loader.v
 set_global_assignment -name VERILOG_FILE rtl/top/orb_top.v
 set_global_assignment -name SDC_FILE orb_top.sdc
-set_global_assignment -name MIF_FILE rbrief_pattern.mif
-set_global_assignment -name QIP_FILE rom.qip
-set_global_assignment -name VERILOG_FILE rom.v
-set_global_assignment -name VERILOG_FILE sim/tb_fast_score.v
-set_global_assignment -name VERILOG_FILE sim/tb_orb_fast_detector.v
-set_global_assignment -name VERILOG_FILE sim/mem_interface/sram_image_subsystem_top.v
 set_global_assignment -name VERILOG_FILE rtl/mem_interface/sram_image_subsystem_top.v
-set_global_assignment -name VERILOG_FILE sim/mem_interface/tb_sram_image_subsystem.v
-set_global_assignment -name VERILOG_FILE sim/mem_interface/sram_model.v
 set_global_assignment -name VERILOG_FILE rtl/descriptor/orb_descriptor_top.v
-set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
-set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
-set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name QIP_FILE rtl/descriptor/rom.qip
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
