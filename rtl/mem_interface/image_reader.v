@@ -1,5 +1,5 @@
 module image_reader #(
-    parameter NUM_BANKS = 7             // so bank (hang vat ly) cua Line Buffer
+    parameter NUM_BANKS = 3'd7             // so bank (hang vat ly) cua Line Buffer
 )(
     input  wire        clk,
     input  wire        rst_n,
