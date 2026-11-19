@@ -1,4 +1,11 @@
+# ============================================================
+# ORB Accelerator - DE2
+# Quartus II / Platform Designer / ModelSim / Nios II
+# ============================================================
+
+# Project-specific generated directory
 orb_accelerator/
+
 # ============================================================
 # Quartus II
 # ============================================================
@@ -11,54 +18,90 @@ hc_output/
 .qsys_edit/
 hps_isw_handoff/
 
+# Reports and generated output
 *.rpt
-*.chg
-*.sof
-*.pof
 *.summary
 *.done
 *.pin
+*.sof
+*.pof
+*.pdi
+*.jic
+*.rbf
 *.qws
 *.smsg
 *.jdi
+*.chg
 
-# Quartus temporary / backup files
+# Quartus backup / temporary files
 *.bak
 *.tmp
+*.qws
 
+# ============================================================
+# Platform Designer / Qsys generated files
+# Keep *.qsys source design files tracked.
+# ============================================================
+
+system/
+*.sopcinfo
+*.bsf
+*.cmp
+*.html
 
 # ============================================================
 # ModelSim / QuestaSim
+# Keep testbenches and simulation input/reference data tracked.
 # ============================================================
 
 work/
 sim/work/
-
 transcript
 sim/transcript
-
 vsim.wlf
 sim/vsim.wlf
-
 *.wlf
 *.vstf
+*.mti
+*.mpf
 
-
-# ============================================================
-# Icarus Verilog
-# ============================================================
-
-*.vvp
-
-
-# ============================================================
-# Simulation-generated files
-# ============================================================
-
-*.log
+# Simulation output / waveform files
 *.vcd
 *.fst
+*.vvp
+*.log
 
+# ============================================================
+# Nios II Eclipse / software build output
+# Keep application source, project files and BSP settings.
+# ============================================================
+
+# Eclipse workspace metadata (not project source)
+.metadata/
+**/.metadata/
+
+# Nios II application build products
+*.elf
+*.axf
+*.o
+*.obj
+*.d
+*.a
+*.map
+*.objdump
+*.srec
+*.hex
+
+# Generated BSP build products
+software/*_bsp/obj/
+software/*_bsp/libhal_bsp.a
+software/*_bsp/memory.gdb
+software/*_bsp/linker.x
+software/*_bsp/summary.html
+
+# Generated application build directory
+software/*/obj/
+software/*/build/
 
 # ============================================================
 # Python
@@ -69,18 +112,15 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
-
 # ============================================================
 # Editors / IDE
 # ============================================================
 
 .vscode/
 .idea/
-
 *.swp
 *.swo
 *~
-
 
 # ============================================================
 # Operating System
