@@ -24,10 +24,10 @@
 //   pack duoc pipeline 4 stage de dong bo voi out_valid.
 // ============================================================================
 module orb_fast_detector #(
-    parameter IMG_W   = 640,
-    parameter IMG_H   = 480,
-    parameter BORDER  = 21,
-    parameter COORD_W = 10
+    parameter               COORD_W = 10,
+    parameter [COORD_W-1:0] IMG_W   = 10'd640,
+    parameter [COORD_W-1:0] IMG_H   = 10'd480,
+    parameter [COORD_W-1:0] BORDER  = 10'd21
 )(
     input  wire                 clk,
     input  wire                 rst_n,
@@ -55,11 +55,12 @@ module orb_fast_detector #(
     // ------------------------------------------------------------------
     // Gioi han vung hop le (cach bien >= BORDER)
     // ------------------------------------------------------------------
+    localparam [COORD_W-1:0] ONE   = {{(COORD_W-1){1'b0}}, 1'b1};
     localparam [COORD_W-1:0] X_MIN = BORDER;
-    localparam [COORD_W-1:0] X_MAX = IMG_W - BORDER - 1;
+    localparam [COORD_W-1:0] X_MAX = IMG_W - BORDER - ONE;
     localparam [COORD_W-1:0] Y_MIN = BORDER;
-    localparam [COORD_W-1:0] Y_MAX = IMG_H - BORDER - 1;
-
+    localparam [COORD_W-1:0] Y_MAX = IMG_H - BORDER - ONE;
+	 
     wire border_ok_w;
     assign border_ok_w = (in_x >= X_MIN) && (in_x <= X_MAX) &&
                          (in_y >= Y_MIN) && (in_y <= Y_MAX);
