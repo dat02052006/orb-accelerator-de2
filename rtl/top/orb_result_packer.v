@@ -27,8 +27,8 @@ module orb_result_packer (
     output wire         packer_overflow // bao loi neu out_we den khi chua day xong 18 word
 );
 
-    reg [287:0] shift_reg;
-    reg [4:0]   word_cnt;       // dem tu 18 ve 0
+    reg [303:0] shift_reg;
+    reg [4:0]   word_cnt;       // dem tu 19 ve 0
     reg         orb_done_latched;
     reg         overflow_reg;
 
@@ -43,35 +43,32 @@ module orb_result_packer (
         end
     end
 
-    // Thanh ghi dich va bo dem 18 word
+    // Thanh ghi dich va bo dem 19 word
     always @(posedge clk) begin
         if (rst || start) begin
-            shift_reg    <= 288'd0;
+            shift_reg    <= 304'd0;
             word_cnt     <= 5'd0;
             overflow_reg <= 1'b0;
         end else begin
             if (out_we) begin
                 if (busy) begin
-                    // Canh bao: 2 keypoint xuat hien cach nhau < 18 chu ky
                     overflow_reg <= 1'b1; 
                 end else begin
-                    // Dong goi 288 bit (Word 0 nam o [15:0])
+                    // Dong goi 304 bit (19 word, Word 0 nam o [15:0])
                     shift_reg <= {
-                        out_desc[255:0],                        // Word 3..18
+                        out_desc[255:0],                        // Word 3..18 (16 word)
                         3'd0, out_angle[4:0], out_score[7:0],   // Word 2
                         7'd0, out_y[8:0],                       // Word 1
                         6'd0, out_x[9:0]                        // Word 0
                     };
-                    word_cnt <= 5'd18;
+                    word_cnt <= 5'd19;
                 end
             end else if (busy && !fifo_full) begin
-                // Dich phai 16 bit moi khi ghi thanh cong 1 word vao FIFO
-                shift_reg <= {16'd0, shift_reg[287:16]};
+                shift_reg <= {16'd0, shift_reg[303:16]};
                 word_cnt  <= word_cnt - 5'd1;
             end
         end
     end
-
     assign fifo_wdata      = shift_reg[15:0];
     assign fifo_wr         = busy && !fifo_full;
     assign packer_overflow = overflow_reg;
