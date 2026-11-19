@@ -11,10 +11,10 @@
 // FSM tach 3 phan: next-state logic / state register / output logic.
 // -----------------------------------------------------------------------------
 module orb_dma_write #(
-    parameter DATA_W    = 16,
-    parameter ADDR_W    = 32,
-    parameter BURST_LEN = 8,
-    parameter FIFO_CW   = 10
+    parameter integer DATA_W    = 16,
+    parameter integer ADDR_W    = 32,
+    parameter [7:0]   BURST_LEN = 8'd8,
+    parameter integer FIFO_CW   = 10
 )(
     input  wire                 clk,
     input  wire                 rst,              // sync, active-high
@@ -48,8 +48,8 @@ module orb_dma_write #(
     localparam [1:0] S_BURST = 2'd2;
     localparam [1:0] S_DONE  = 2'd3;
 
-    localparam BURST_BYTES = BURST_LEN * (DATA_W / 8);
-    localparam LAST_BEAT   = BURST_LEN - 1;
+    localparam [ADDR_W-1:0] BURST_BYTES = BURST_LEN * (DATA_W / 8);
+    localparam [7:0]        LAST_BEAT   = BURST_LEN - 8'd1;
 
     reg  [1:0]          state;
     reg  [1:0]          next_state;
