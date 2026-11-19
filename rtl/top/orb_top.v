@@ -39,7 +39,7 @@ module orb_top #(
     output wire         orb_error,      // xung 1 chu ky: loi line buffer / image_reader
     output reg          kp_overflow,    // muc 1 neu so keypoint > 2^ADDR_W
     output wire         packer_overflow,// muc 1 neu out_we den chong cheo < 18 chu ky
-    output wire [11:0]  out_count,      // so keypoint da trich xuat
+    output wire [ADDR_W:0]  out_count,      // so keypoint da trich xuat
     output wire [31:0]  words_written,  // tong so word 16-bit DMA da ghi ra SDRAM
 
     // ---- Avalon-MM master: ghi ket qua keypoint ra SDRAM ----
@@ -446,7 +446,7 @@ module orb_top #(
         .flush_done (nms_flush_done)
     );
 
-    (* ramstyle = "M4K" *) reg [26:0] kp_mem [0:MAX_KP-1];
+    (* ramstyle = "M4K, no_rw_check" *) reg [26:0] kp_mem [0:MAX_KP-1];
     reg  [ADDR_W:0] kp_count;
     wire            kp_rd_en;
     wire [ADDR_W-1:0] kp_rd_addr;
