@@ -84,7 +84,7 @@ module orb_ip_wrapper #(
     wire        orb_error;
     wire        kp_overflow;
     wire        packer_overflow;
-    wire [11:0] out_count;
+    wire [ADDR_W:0] out_count;
     wire [31:0] words_written;
 
     wire csr_wr_ctrl   = avs_csr_write && (avs_csr_address == 3'd0);
@@ -171,7 +171,7 @@ module orb_ip_wrapper #(
                       };
                 3'd2: avs_csr_readdata <= dma_base_addr_reg;
                 3'd3: avs_csr_readdata <= {24'd0, fast_thresh_reg};
-                3'd4: avs_csr_readdata <= {20'd0, out_count};
+                3'd4: avs_csr_readdata <= {{(31-ADDR_W){1'b0}}, out_count};
                 3'd5: avs_csr_readdata <= words_written;
                 3'd6: avs_csr_readdata <= IP_SIGNATURE;
                 default: avs_csr_readdata <= 32'd0;
