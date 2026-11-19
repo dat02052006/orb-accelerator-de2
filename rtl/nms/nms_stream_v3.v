@@ -25,9 +25,9 @@
 //     khoi phia sau tu cong offset (vd +21).
 //==============================================================================
 module nms_stream_v3 #(
-    parameter IMG_W      = 598,   // Chieu rong vung hoat dong (640 - 2*21)
-    parameter IMG_H      = 438,   // Chieu cao vung hoat dong  (480 - 2*21)
-    parameter ADDR_WIDTH = 10
+    parameter integer    ADDR_WIDTH = 10,
+    parameter [9:0]      IMG_W      = 10'd598,   // Chieu rong vung hoat dong (640 - 2*21)
+    parameter [8:0]      IMG_H      = 9'd438
 )(
     input  wire        clk,
     input  wire        rst_n,
@@ -185,11 +185,13 @@ module nms_stream_v3 #(
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n)
-            ptr <= 0;
+            ptr <= {ADDR_WIDTH{1'b0}};
         else if (flush_done)
-            ptr <= 0;
+            ptr <= {ADDR_WIDTH{1'b0}};
         else if (step)
-            ptr <= (ptr == RAM_DEPTH - 1) ? 0 : (ptr + 1'b1);
+            ptr <= (ptr == RAM_DEPTH[ADDR_WIDTH-1:0] - {{(ADDR_WIDTH-1){1'b0}}, 1'b1})
+                   ? {ADDR_WIDTH{1'b0}}
+                   : (ptr + {{(ADDR_WIDTH-1){1'b0}}, 1'b1});
     end
 
     //==========================================================================
