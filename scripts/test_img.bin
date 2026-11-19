@@ -1,0 +1,6 @@
+import cv2
+
+img = cv2.imread("input.jpg", cv2.IMREAD_GRAYSCALE)
+img_640x480 = cv2.resize(img, (640, 480))
+img_640x480.tofile("test_img.bin")
+print("Da xuat file test_img.bin (307,200 bytes)")
