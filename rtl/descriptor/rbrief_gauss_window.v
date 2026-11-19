@@ -18,11 +18,11 @@
 //   Smoothed buffer dia chi = srow*37 + scol.
 // ============================================================================
 module rbrief_gauss_window #(
-    parameter P  = 8,
-    parameter K0 = 18,          // |x| = 3
-    parameter K1 = 34,          // |x| = 2
-    parameter K2 = 48,          // |x| = 1
-    parameter K3 = 56           // x = 0
+    parameter integer P  = 8,
+    parameter [P-1:0] K0 = 18,          // |x| = 3
+    parameter [P-1:0] K1 = 34,          // |x| = 2
+    parameter [P-1:0] K2 = 48,          // |x| = 1
+    parameter [P-1:0] K3 = 56           // x = 0
 )(
     input  wire        clk,
     input  wire        rst_n,
@@ -47,7 +47,7 @@ module rbrief_gauss_window #(
 
     localparam HW    = P + 8;                   // do rong H sau pass ngang
     localparam VW    = 2*P + 8;                 // do rong tong sau pass doc
-    localparam ROUND = 1 << (2*P - 1);
+    localparam [VW-1:0] ROUND = {{(VW-1){1'b0}}, 1'b1} << (2*P - 1);
 
     // ======================================================
     // Pass 1, stage 1: chot word tu luong pb_*
