@@ -58,16 +58,21 @@ module rbrief_descriptor #(
     // ======================================================
     // ROM 256 cap toa do goc: {xp[5:0], yp[5:0], xq[5:0], yq[5:0]}, co dau
     // ======================================================
-    reg [23:0] base_rom [0:255] /* synthesis ram_init_file = "rbrief_base.mif" */;
-    reg [23:0] base_q;
+    wire [23:0] base_q;
 
-    // synthesis translate_off
-    initial $readmemh("rbrief_base.hex", base_rom);
-    // synthesis translate_on
-
-    always @(posedge clk) begin
-        base_q <= base_rom[pair_cnt];
-    end
+    altsyncram #(
+        .operation_mode         ("ROM"),
+        .width_a                (24),
+        .widthad_a              (8),
+        .numwords_a             (256),
+        .outdata_reg_a          ("UNREGISTERED"),
+        .init_file              ("rbrief_base.mif"),
+        .intended_device_family ("Cyclone II")
+    ) u_base_rom (
+        .clock0    (clk),
+        .address_a (pair_cnt),
+        .q_a       (base_q)
+    );
 
     wire signed [5:0] xp = base_q[23:18];
     wire signed [5:0] yp = base_q[17:12];
