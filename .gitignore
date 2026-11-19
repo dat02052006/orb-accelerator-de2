@@ -1,10 +1,23 @@
+# Nios II Eclipse workspace
+software/.metadata/
+
+# Nios II application build outputs
+software/orb_accelerator/obj/
+software/orb_accelerator/*.elf
+software/orb_accelerator/*.map
+software/orb_accelerator/*.objdump
+
+# Nios II BSP build outputs
+software/orb_accelerator_bsp/obj/
+software/orb_accelerator_bsp/*.a
+software/orb_accelerator_bsp/*.elf
+software/orb_accelerator_bsp/*.map
+software/orb_accelerator_bsp/*.objdump
 # ============================================================
 # ORB Accelerator - DE2
 # Quartus II / Platform Designer / ModelSim / Nios II
 # ============================================================
 
-# Project-specific generated directory
-orb_accelerator/
 
 # ============================================================
 # Quartus II
